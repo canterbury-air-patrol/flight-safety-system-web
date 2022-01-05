@@ -17,9 +17,9 @@ def http_address(address, port, https):
     else:
         proto = 'http'
         default_port = 80
-    address = "{}://{}".format(proto, address)
+    address = f"{proto}://{address}"
     if port != default_port:
-        address = "{}:{}".format(address, port)
+        address = f"{address}:{port}"
     return address
 
 
@@ -45,7 +45,7 @@ class ServerConfig(models.Model):
         return http_address(self.address, self.config_port, self.https)
 
     def __str__(self):
-        return "FSS Server: {} @ {}".format(self.name, self.address)
+        return f"FSS Server: {self.name} @ {self.address}"
 
     class Meta:
         indexes = [
@@ -72,7 +72,7 @@ class SMMConfig(models.Model):
         return http_address(self.address, self.port, self.https)
 
     def __str__(self):
-        return "Search Management Map {} @ {}".format(self.name, self.address)
+        return f"Search Management Map {self.name} @ {self.address}"
 
 
 class AssetConfig(models.Model):
@@ -85,7 +85,7 @@ class AssetConfig(models.Model):
     smm_password = models.CharField(max_length=255)
 
     def __str__(self):
-        return "Config for {}, using {}".format(self.asset, self.smm)
+        return f"Config for {self.asset}, using {self.smm}"
 
     class Meta:
         indexes = [

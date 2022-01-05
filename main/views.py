@@ -23,10 +23,7 @@ def status_view(request):
     Report the current status
     """
     assets = Asset.objects.all()
-    return HttpResponse(('<tr>'
-                         '<td class="server-status-label">Known Assets</td>'
-                         '<td class="server-status-value">{}</td>'
-                         '</tr>').format(assets.count()))
+    return HttpResponse(f'<tr><td class="server-status-label">Known Assets</td><td class="server-status-value">{assets.count()}</td></tr>')
 
 
 def server_list(request):

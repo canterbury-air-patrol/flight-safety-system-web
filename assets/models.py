@@ -13,7 +13,7 @@ class Asset(models.Model):
     name = models.CharField(max_length=100)
 
     def __str__(self):
-        return "Asset: {}".format(self.name)
+        return f"Asset: {self.name}"
 
     class Meta:
         indexes = [
@@ -32,11 +32,7 @@ class AssetSearchProgress(models.Model):
     search_progress_of = models.IntegerField()
 
     def __str__(self):
-        return ("{} performing search {}"
-                " @ {} of {}").format(self.asset,
-                                      self.search,
-                                      self.search_progress,
-                                      self.search_progress_of)
+        return f"{self.asset} performing search {self.search} @ {self.search_progress} of {self.search_progress_of}"
 
     class Meta:
         indexes = [
@@ -55,8 +51,7 @@ class AssetStatus(models.Model):
     bat_volt = models.FloatField(null=True, default=0.0)
 
     def __str__(self):
-        return ("{} with {}% battery remaining"
-                " ({}mAh used, {} volts)").format(self.asset, self.bat_percent, self.bat_used_mah, self.bat_volt)
+        return f"{self.asset} with {self.bat_percent}% battery remaining ({self.bat_used_mah}mAh used, {self.bat_volt} volts)"
 
     class Meta:
         indexes = [
@@ -116,7 +111,7 @@ class AssetCommand(models.Model):
     altitude = models.IntegerField(null=True, blank=True)
 
     def __str__(self):
-        return "Command {} to {}".format(self.asset, self.get_command_display())
+        return f"Command {self.asset} to {self.get_command_display()}"
 
     def get_command_display(self):
         """
