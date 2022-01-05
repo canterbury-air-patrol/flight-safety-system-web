@@ -2,10 +2,10 @@
 URLs for configuration
 """
 
-from django.conf.urls import url
+from django.urls import re_path
 
 from . import views
 
 urlpatterns = [
-    url(r'^$', views.config_main, name='config_main'),
+    re_path(r'^$', views.config_main, name='config_main'),
 ]
