@@ -52,7 +52,7 @@ class AssetStatus(models.Model):
     timestamp = models.DateTimeField(default=timezone.now)
     bat_percent = models.IntegerField()
     bat_used_mah = models.IntegerField()
-    bat_volt = models.FloatField(null=True,default=0.0)
+    bat_volt = models.FloatField(null=True, default=0.0)
 
     def __str__(self):
         return ("{} with {}% battery remaining"

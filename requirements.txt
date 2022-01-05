@@ -8,4 +8,5 @@ psycopg2-binary
 pycodestyle
 pylint
 pylint-django
+isort
 
