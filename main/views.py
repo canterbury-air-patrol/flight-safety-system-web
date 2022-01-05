@@ -79,5 +79,4 @@ def login_page(request):
             login(request, user)
             # Redirect to a success page.
             return redirect('/')
-        print("Failed to authenticate as {} with {}".format(username, password))
     return render(request, 'main/login_page.html')

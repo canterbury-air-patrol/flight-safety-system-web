@@ -116,31 +116,31 @@ function assetGotoDialog(asset)
                 <input type="text" id="asset-goto-latitude" value="${deg_to_dm(position.lat, true)}"></input>
                 <input type="text" id="asset-goto-longitude" value="${deg_to_dm(position.lng, false)}"></input>
                 <div id="map" class="dialog-map"/>
-                </div>`;
+                </div>`
     dialogCreate(`Send ${asset.name} to`,
         html,
         [{
             btn_class: 'btn-light',
             label: 'Goto',
             btn_id: 'dialog_button_goto',
-        }], 'map-modal');
+        }], 'map-modal')
     $("#dialog_button_goto").on("click", function() {
-        dialogHide();
+        dialogHide()
         asset.Goto(dm_to_deg($('#asset-goto-latitude').val()), dm_to_deg($('#asset-goto-longitude').val()))
-    });
+    })
 
-    var map = L.map('map').setView([position.lat, position.lng], 13);
+    var map = L.map('map').setView([position.lat, position.lng], 13)
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-    }).addTo(map);
-    var m = L.marker([position.lat, position.lng], {draggable: true, autopan: true });
-    m.addTo(map);
+    }).addTo(map)
+    var m = L.marker([position.lat, position.lng], {draggable: true, autopan: true })
+    m.addTo(map)
     m.on('dragend', function() {
-            var markerCoords = m.getLatLng();
-            $("#asset-goto-latitude").val(deg_to_dm(markerCoords.lat, true));
-            $("#asset-goto-longitude").val(deg_to_dm(markerCoords.lng, false));
+            var markerCoords = m.getLatLng()
+            $("#asset-goto-latitude").val(deg_to_dm(markerCoords.lat, true))
+            $("#asset-goto-longitude").val(deg_to_dm(markerCoords.lng, false))
             });
-    $('#dialog-modal.map-modal').on('shown.bs.modal', () => {map.invalidateSize();});
+    $('#dialog-modal.map-modal').on('shown.bs.modal', () => {map.invalidateSize()})
 }
 
 function assetAltitudeDialog(asset)
