@@ -140,11 +140,9 @@ def asset_add(request):
     if request.method == "POST":
         asset_name = request.POST.get('asset_name')
         if asset_name is not None:
-            try:
-                asset = Asset.objects.get(name=asset_name)
+            if Asset.objects.filter(name=asset_name).exists():
                 return HttpResponseForbidden("Asset already exists")
-            except ObjectDoesNotExist:
-                asset = Asset(name=asset_name)
-                asset.save()
-                return HttpResponse("Created")
+            asset = Asset(name=asset_name)
+            asset.save()
+            return HttpResponse("Created")
     return HttpResponseBadRequest("Only POST is supported")
