@@ -1,10 +1,14 @@
 const path = require('path');
 
 module.exports = {
-    entry: './frontend/main.js',
+    entry: {
+        main: './frontend/main.js',
+        pretty: './frontend/pretty.js',
+    },
     output: {
-        filename: 'frontend.js',
+        filename: '[name].js',
         path: path.resolve(__dirname, 'dist'),
+        publicPath: '/static/',
     },
     mode: 'production',
     module: {
