@@ -1,9 +1,9 @@
 #!/bin/bash
 
-./setup.sh
-cp -dpR static/* main/static/
+cp docker/local_settings.py fss/local_settings.py
+./setup-db.sh
+
 source venv/bin/activate
-./manage.py makemigrations
 ./manage.py migrate
 
 if [ "$1" == "test" ]

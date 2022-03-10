@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -ex
 
 rm -fr venv
 python3 -m venv venv
@@ -14,14 +14,7 @@ npm ci && npm run build
 # Create the local settings file from the template
 if [ ! -f fss/local_settings.py ]
 then
-	grep -q init /proc/1/cmdline
-	RETCODE=$?
-	if [ $RETCODE -eq 0 ]
-    then
-        cp fss/local_settings.py.template fss/local_settings.py
-	else
-		cp docker/local_settings.py fss/local_settings.py
-	fi
+    cp fss/local_settings.py.template fss/local_settings.py
 
     echo ""
     echo "Create fss/local_settings.py from template"
@@ -29,12 +22,7 @@ then
     echo "At a minimum you will need to set your postgis parameters"
 fi
 
-[ ! -z "$DB_HOST" ] && sed -i "s|'HOST': .*|'HOST': '$DB_HOST',|" fss/local_settings.py || true
-[ ! -z "$DB_USER" ] && sed -i "s|'USER': .*|'USER': '$DB_USER',|" fss/local_settings.py || true
-[ ! -z "$DB_NAME" ] && sed -i "s|'NAME': .*|'NAME': '$DB_NAME',|" fss/local_settings.py || true
-[ ! -z "$DB_PASS" ] && sed -i "s|'PASSWORD': .*|'PASSWORD': '$DB_PASS',|" fss/local_settings.py || true
-
-cat fss/local_settings.py
+./setup-db.sh
 
 if [ ! -f fss/secretkey.txt ]
 then

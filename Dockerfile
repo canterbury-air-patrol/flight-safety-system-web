@@ -4,6 +4,6 @@ RUN apt-get update && apt-get install -y libgdal-dev nodejs npm && rm -fr /var/l
 RUN mkdir /code
 WORKDIR /code
 COPY . /code/
-RUN npm i -g npm@latest && npm cache verify && npm ci && npm run build
+RUN ./setup.sh
 
 ENTRYPOINT /code/docker/start.sh
