@@ -465,7 +465,9 @@ function serversUpdateKnown()
 function setupPage()
 {
     $.ajaxSetup({timeout: 2500 });
-    UIServerNew (serverAdd ({name: 'direct', address: '127.0.0.1', client_port: '0', url: window.location.href.slice(0, -1) }));
+    let direct = serverAdd ({name: 'direct', address: '127.0.0.1', client_port: '0', url: window.location.href.slice(0, -1) });
+    UIServerNew (direct);
+    serverUpdateStatus(direct);
     serversUpdateKnown();
     setInterval(function () {
         for (var ks in known_servers)
