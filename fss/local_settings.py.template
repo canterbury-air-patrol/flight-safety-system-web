@@ -12,6 +12,7 @@ TIME_ZONE = 'UTC'
 
 # Update this with your hostname
 ALLOWED_HOSTS = ['localhost']
+CSRF_TRUSTED_ORIGINS = ['http://localhost:8080']
 
 # Database
 # https://docs.djangoproject.com/en/2.1/ref/settings/#databases
