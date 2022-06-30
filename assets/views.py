@@ -5,6 +5,7 @@ from django.contrib.gis.geos import Point
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, render
+from django.views.decorators.csrf import csrf_exempt
 
 from .models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
 
@@ -99,6 +100,7 @@ def asset_status_json(request, asset_id):
     return JsonResponse(data)
 
 
+@csrf_exempt
 def asset_command_set(request, asset_id):
     """
     Set the command for a given asset
