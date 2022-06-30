@@ -7,7 +7,10 @@ import 'bootstrap/dist/css/bootstrap.css';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './fssweb.css';
-import 'leaflet/dist/images/marker-shadow.png';
+
+import marker_icon from 'leaflet/dist/images/marker-icon.png';
+import marker_icon_2x from 'leaflet/dist/images/marker-icon-2x.png';
+import marker_icon_shadow from 'leaflet/dist/images/marker-shadow.png';
 
 var known_servers = [];
 var known_assets = [];
@@ -464,6 +467,10 @@ function serversUpdateKnown()
 
 function setupPage()
 {
+    L.Icon.Default.prototype.options.iconUrl = marker_icon
+    L.Icon.Default.prototype.options.iconRetinaUrl = marker_icon_2x
+    L.Icon.Default.prototype.options.shadowUrl = marker_icon_shadow
+
     $.ajaxSetup({timeout: 2500 });
     let direct = serverAdd ({name: 'direct', address: '127.0.0.1', client_port: '0', url: window.location.href.slice(0, -1) });
     UIServerNew (direct);
