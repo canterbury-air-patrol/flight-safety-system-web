@@ -5,16 +5,25 @@ class AssetServer {
     this.server = server
     this.asset = asset
     this.pk = pk
+    this.data = []
   }
 
   getURL (path) {
     return this.server.getURL(`/assets/${this.pk}/${path}`)
   }
+
+  updateData () {
+    const self = this
+    $.getJSON(this.getURL('status.json'), function (data) {
+      self.data = data
+    })
+  }
 }
 
-class Asset {
+export class Asset {
   constructor (assetName) {
     this.name = assetName
+    this.selectedServer = null
     this.servers = []
   }
 
@@ -32,6 +41,9 @@ class Asset {
     if (serverEntry === null) {
       const newAssetServer = new AssetServer(server, this, pk)
       this.servers.push(newAssetServer)
+      if (this.selectedServer === null) {
+        this.selectedServer = newAssetServer
+      }
       return newAssetServer
     }
     return serverEntry
@@ -96,14 +108,14 @@ class Asset {
     let position = null
     for (const s in this.servers) {
       const serverEntry = this.servers[s]
-      if (serverEntry.position && (position === null || serverEntry.position.timestamp > position.timestamp)) {
-        position = serverEntry.position
+      if (serverEntry.data.position && (position === null || serverEntry.data.position.timestamp > position.timestamp)) {
+        position = serverEntry.data.position
       }
     }
     return position
   }
-}
 
-export function createAsset (assetName) {
-  return new Asset(assetName)
+  setSelected (serverName) {
+    this.selectedServer = this.serverFind(serverName)
+  }
 }
