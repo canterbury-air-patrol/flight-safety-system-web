@@ -9,41 +9,25 @@ export class Server {
     this.connected = false
     this.userName = null
     this.assets = []
+    this.servers = []
   }
 
   getURL (path) {
     return this.url + path
   }
 
-  updateAssetsData () {
-    const self = this
-    $.getJSON(this.getURL('/assets.json'),
-      function (data) {
-        const assets = []
-        $.each(data.assets, function (key, val) {
-          assets.push(val)
-        })
-        self.assets = assets
-      }).fail(function () {})
-  }
-
-  updateLoginInfo () {
-    const self = this
-    $.get(this.getURL('/current_user/'), function (data) {
-      self.userName = data.currentUser
-    })
-  }
-
   updateStatus () {
     const self = this
-    $.get(this.getURL('/status/'), function (data) {
-      self.status = data
+    $.get(this.getURL('/current/all.json/'), function (data) {
       self.connected = true
-      self.updateLoginInfo()
-      self.updateAssetsData()
+      self.status = `Known Assets: ${data.assets.length}`
+      self.userName = data.currentUser
+      self.assets = data.assets
+      self.servers = data.servers
     }).fail(function () {
       self.status = 'Unreachable'
       self.connected = false
+      self.currentUser = null
     })
   }
 }

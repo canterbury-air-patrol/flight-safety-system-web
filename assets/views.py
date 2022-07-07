@@ -20,13 +20,15 @@ def assets_main(request):
     return render(request, 'assets/main.html', data)
 
 
-def asset_status_json(request, asset_id):
+def asset_status_data(asset):
     """
-    Show the current asset status
+    Get all the current status data for an asset
     """
-    asset = get_object_or_404(Asset, pk=asset_id)
     data = {
-        'asset': {'name': asset.name}
+        'asset': {
+            'name': asset.name,
+            'pk': asset.pk
+        }
     }
 
     try:
@@ -97,7 +99,16 @@ def asset_status_json(request, asset_id):
     except ObjectDoesNotExist:
         pass
 
-    return JsonResponse(data)
+    return data
+
+
+def asset_status_json(request, asset_id):
+    """
+    Show the current asset status
+    """
+    asset = get_object_or_404(Asset, pk=asset_id)
+
+    return JsonResponse(asset_status_data(asset))
 
 
 @csrf_exempt

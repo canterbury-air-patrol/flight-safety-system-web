@@ -12,11 +12,8 @@ class AssetServer {
     return this.server.getURL(`/assets/${this.pk}/${path}`)
   }
 
-  updateData () {
-    const self = this
-    $.getJSON(this.getURL('status.json'), function (data) {
-      self.data = data
-    })
+  updateData (assetData) {
+    this.data = assetData
   }
 }
 

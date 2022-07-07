@@ -7,6 +7,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from assets.models import Asset
+from assets.views import asset_status_data
 from config.models import ServerConfig
 
 
@@ -80,3 +81,33 @@ def login_page(request):
             # Redirect to a success page.
             return redirect('/')
     return render(request, 'main/login_page.html')
+
+
+def all_status_data(request):
+    """
+    Return all data in one go
+    """
+    data = {
+        'currentUser': None,
+        'servers': [],
+        'assets': []
+    }
+
+    if request.user.is_authenticated:
+        data['currentUser'] = request.user.username
+
+    servers = ServerConfig.objects.filter(active=True)
+    for server in servers:
+        server_details = {
+            'name': server.name,
+            'address': server.address,
+            'client_port': server.client_port,
+            'url': server.http_address(),
+        }
+        data['servers'].append(server_details)
+
+    assets = Asset.objects.all()
+    for asset in assets:
+        data['assets'].append(asset_status_data(asset))
+
+    return JsonResponse(data)

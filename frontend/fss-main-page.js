@@ -590,17 +590,12 @@ export class FSSMainPage extends React.Component {
   }
 
   serversUpdateKnown () {
-    // Load the known servers
-    const self = this
-    $.getJSON('../servers.json', function (data) {
-      const servers = []
-      $.each(data.servers, function (key, val) {
-        servers.push(val)
-      })
-      for (const s in servers) {
-        self.serverAdd(servers[s])
+    for (const ks in this.state.knownServers) {
+      const server = this.state.knownServers[ks]
+      for (const s in server.servers) {
+        this.serverAdd(server.servers[s])
       }
-    })
+    }
   }
 
   assetAdd (assetName) {
@@ -627,8 +622,8 @@ export class FSSMainPage extends React.Component {
 
   assetUpdate (assetName, server, assetData) {
     const asset = this.assetAdd(assetName)
-    const assetServer = asset.serverAdd(server, assetData.pk)
-    assetServer.updateData()
+    const assetServer = asset.serverAdd(server, assetData.asset.pk)
+    assetServer.updateData(assetData)
   }
 
   updateData () {
@@ -638,7 +633,7 @@ export class FSSMainPage extends React.Component {
       server.updateStatus()
       for (const a in server.assets) {
         const asset = server.assets[a]
-        this.assetUpdate(asset.name, server, asset)
+        this.assetUpdate(asset.asset.name, server, asset)
       }
     }
     this.setState({})
