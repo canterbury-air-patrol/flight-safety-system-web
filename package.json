@@ -18,7 +18,7 @@
     "bootstrap": "^4.6.0",
     "esbuild": "^0.14.48",
     "esbuild-config": "^0.2.0",
-    "eslint": "^8.18.0",
+    "eslint": "^8.19.0",
     "eslint-plugin-react": "^7.30.1",
     "jquery": "^3.6.0",
     "leaflet": "^1.7.1",
