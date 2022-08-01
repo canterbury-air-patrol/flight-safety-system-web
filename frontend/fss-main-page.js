@@ -229,7 +229,7 @@ class DisArm extends ModalWithButton {
   }
 
   renderModalTitle () {
-    return (<>Disarm (this.props.asset.name)</>)
+    return (<>Disarm {this.props.asset.name}</>)
   }
 
   renderModalBody () {
