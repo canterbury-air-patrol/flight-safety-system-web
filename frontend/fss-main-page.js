@@ -580,6 +580,7 @@ export class FSSMainPage extends React.Component {
   }
 
   componentDidMount () {
+    this.updateData()
     $.ajaxSetup({ timeout: 2500 })
     this.timer = setInterval(() => this.updateData(), 3000)
   }
@@ -626,11 +627,11 @@ export class FSSMainPage extends React.Component {
     assetServer.updateData(assetData)
   }
 
-  updateData () {
+  async updateData () {
     this.serversUpdateKnown()
     for (const ks in this.state.knownServers) {
       const server = this.state.knownServers[ks]
-      server.updateStatus()
+      await server.updateStatus()
       for (const a in server.assets) {
         const asset = server.assets[a]
         this.assetUpdate(asset.asset.name, server, asset)

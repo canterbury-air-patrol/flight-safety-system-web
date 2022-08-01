@@ -16,9 +16,9 @@ export class Server {
     return this.url + path
   }
 
-  updateStatus () {
+  async updateStatus () {
     const self = this
-    $.get(this.getURL('/current/all.json/'), function (data) {
+    await $.get(this.getURL('/current/all.json/'), function (data) {
       self.connected = true
       self.status = `Known Assets: ${data.assets.length}`
       self.userName = data.currentUser
