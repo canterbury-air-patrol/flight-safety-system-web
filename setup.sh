@@ -9,7 +9,7 @@ pip install wheel
 pip install -r requirements.txt
 
 # Prepare the frontend
-rm -fr main/static && npm ci && npm run build && cp -dpR dist main/static
+npm ci && npm run build
 
 # Create the local settings file from the template
 if [ ! -f fss/local_settings.py ]
