@@ -6,8 +6,8 @@ psycopg2-binary
 
 # Code checking
 pycodestyle
-pylint
-pylint-django
+pylint==2.14.*
+pylint-django==2.5.*
 isort
 
 uwsgi
