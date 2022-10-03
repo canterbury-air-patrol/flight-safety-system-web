@@ -15,7 +15,7 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "bootstrap": "^5.2.1",
+    "bootstrap": "^5.2.2",
     "esbuild": "^0.15.9",
     "esbuild-config": "^1.0.1",
     "eslint": "^8.24.0",
