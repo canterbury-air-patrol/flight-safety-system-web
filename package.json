@@ -19,7 +19,7 @@
     "esbuild": "^0.16.7",
     "esbuild-config": "^1.0.1",
     "eslint": "^8.29.0",
-    "jquery": "^3.6.1",
+    "jquery": "^3.6.2",
     "leaflet": "^1.9.3",
     "popper.js": "^1.16.1",
     "prop-types": "^15.8.1",
