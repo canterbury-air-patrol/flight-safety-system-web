@@ -18,7 +18,7 @@
     "bootstrap": "^5.2.3",
     "esbuild": "^0.17.14",
     "esbuild-config": "^1.0.1",
-    "eslint": "^8.36.0",
+    "eslint": "^8.37.0",
     "jquery": "^3.6.4",
     "leaflet": "^1.9.3",
     "popper.js": "^1.16.1",
@@ -29,7 +29,7 @@
     "react-leaflet": "^4.2.1"
   },
   "devDependencies": {
-    "eslint": "^8.36.0",
+    "eslint": "^8.37.0",
     "eslint-plugin-react": "^7.32.2",
     "standard": "^17.0.0"
   }
