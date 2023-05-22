@@ -20,7 +20,7 @@
     "esbuild-config": "^1.0.1",
     "eslint": "^8.40.0",
     "jquery": "^3.7.0",
-    "leaflet": "^1.9.3",
+    "leaflet": "^1.9.4",
     "popper.js": "^1.16.1",
     "prop-types": "^15.8.1",
     "react": "^18.2.0",
