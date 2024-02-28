@@ -68,10 +68,10 @@ def asset_status_data(asset):
         rtt_max = 0
         count = 0
         for rtt in rtts:
-            if rtt_min == -1 or rtt.rtt < rtt_min:
+            if rtt_min == -1:
                 rtt_min = rtt.rtt
-            if rtt_max < rtt.rtt:
-                rtt_max = rtt.rtt
+            rtt_min = min(rtt_min, rtt.rtt)
+            rtt_max = max(rtt_max, rtt.rtt)
             rtt_total += rtt.rtt
             count += 1
         if count > 0:
