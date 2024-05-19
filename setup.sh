@@ -9,7 +9,11 @@ pip install wheel
 pip install -r requirements.txt
 
 # Prepare the frontend
-npm ci && npm run build
+if [ "x${NODE_DONE}" != "xyes" ]
+then
+    npm ci
+    npm run build
+fi
 
 # Create the local settings file from the template
 if [ ! -f fss/local_settings.py ]

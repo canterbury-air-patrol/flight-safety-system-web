@@ -4,7 +4,8 @@
   "main": "frontend/main.js",
   "scripts": {
     "check": "eslint frontend/",
-    "build": "esbuild frontend/main.js frontend/pretty.js $(esbuild-config) && cp -dpR dist/* main/static/",
+    "build-only": "esbuild $(esbuild-config)",
+    "build": "esbuild $(esbuild-config) && cp -dpR dist/* main/static/",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {

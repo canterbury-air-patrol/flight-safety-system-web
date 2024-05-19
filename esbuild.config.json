@@ -1,4 +1,8 @@
 {
+    "entry": [
+        "frontend/main.js",
+        "frontend/pretty.js"
+    ],
     "bundle": true,
     "minify": false,
     "outdir": "dist",
