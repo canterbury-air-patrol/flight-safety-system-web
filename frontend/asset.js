@@ -1,30 +1,30 @@
 import $ from 'jquery'
 
 class AssetServer {
-  constructor (server, asset, pk) {
+  constructor(server, asset, pk) {
     this.server = server
     this.asset = asset
     this.pk = pk
     this.data = []
   }
 
-  getURL (path) {
+  getURL(path) {
     return this.server.getURL(`/assets/${this.pk}/${path}`)
   }
 
-  updateData (assetData) {
+  updateData(assetData) {
     this.data = assetData
   }
 }
 
 export class Asset {
-  constructor (assetName) {
+  constructor(assetName) {
     this.name = assetName
     this.selectedServer = null
     this.servers = []
   }
 
-  serverFind (name) {
+  serverFind(name) {
     for (const s in this.servers) {
       if (this.servers[s].server.name === name) {
         return this.servers[s]
@@ -33,7 +33,7 @@ export class Asset {
     return null
   }
 
-  serverAdd (server, pk) {
+  serverAdd(server, pk) {
     const serverEntry = this.serverFind(server.name)
     if (serverEntry === null) {
       const newAssetServer = new AssetServer(server, this, pk)
@@ -46,33 +46,33 @@ export class Asset {
     return serverEntry
   }
 
-  getServerCount () {
+  getServerCount() {
     return this.servers.length
   }
 
-  sendCommand (data) {
+  sendCommand(data) {
     for (const s in this.servers) {
       const url = this.servers[s].getURL('command/set/')
       $.post(url, data)
     }
   }
 
-  RTL () {
+  RTL() {
     const data = { command: 'RTL' }
     this.sendCommand(data)
   }
 
-  Hold () {
+  Hold() {
     const data = { command: 'HOLD' }
     this.sendCommand(data)
   }
 
-  Continue () {
+  Continue() {
     const data = { command: 'RON' }
     this.sendCommand(data)
   }
 
-  Goto (lat, lng) {
+  Goto(lat, lng) {
     const data = {
       command: 'GOTO',
       latitude: lat,
@@ -81,27 +81,27 @@ export class Asset {
     this.sendCommand(data)
   }
 
-  Altitude (alt) {
+  Altitude(alt) {
     const data = { command: 'ALT', altitude: alt }
     this.sendCommand(data)
   }
 
-  DisArm () {
+  DisArm() {
     const data = { command: 'DISARM' }
     this.sendCommand(data)
   }
 
-  Terminate () {
+  Terminate() {
     const data = { command: 'TERM' }
     this.sendCommand(data)
   }
 
-  Manual () {
+  Manual() {
     const data = { command: 'MAN' }
     this.sendCommand(data)
   }
 
-  positionMostRecent () {
+  positionMostRecent() {
     let position = null
     for (const s in this.servers) {
       const serverEntry = this.servers[s]
@@ -112,7 +112,7 @@ export class Asset {
     return position
   }
 
-  setSelected (serverName) {
+  setSelected(serverName) {
     this.selectedServer = this.serverFind(serverName)
   }
 }

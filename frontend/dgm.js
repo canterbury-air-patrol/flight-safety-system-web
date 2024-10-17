@@ -1,4 +1,4 @@
-export function degToDM (degs, lat) {
+export function degToDM(degs, lat) {
   let dir = ''
   if (degs < 0) {
     degs = degs * -1
@@ -12,7 +12,7 @@ export function degToDM (degs, lat) {
   return d + ' ' + mins + ' ' + dir
 }
 
-export function DMToDegrees (degMinStr) {
+export function DMToDegrees(degMinStr) {
   const parts = degMinStr.split(' ')
   const d = parseInt(parts[0])
   const mins = parseFloat(parts[1])

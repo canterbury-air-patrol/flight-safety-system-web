@@ -2,84 +2,91 @@
 @import 'leaflet/dist/leaflet.css';
 
 div.bar-server {
-	width: 100%;
-	margin: 0 auto;
-	padding: 10px 0;
-	text-align: center;
+  width: 100%;
+  margin: 0 auto;
+  padding: 10px 0;
+  text-align: center;
 }
 
 div.bar-assets {
-	width: 100%;
-	margin: 0 auto;
-	padding: 10px;
-	text-align: center;
+  width: 100%;
+  margin: 0 auto;
+  padding: 10px;
+  text-align: center;
 }
 
-div.server, div.asset {
-	border: 1px;
-	display: inline-block;
-	border-style: solid;
-	background-color: whitesmoke;
-	width: max-content;
-	padding: 15px;
-	margin: 2px 10px;
-	text-align: left;
+div.server,
+div.asset {
+  border: 1px;
+  display: inline-block;
+  border-style: solid;
+  background-color: whitesmoke;
+  width: max-content;
+  padding: 15px;
+  margin: 2px 10px;
+  text-align: left;
 }
 
 .asset-buttons {
-	padding-bottom: 1rem;
+  padding-bottom: 1rem;
 }
 
 .server-tab-btn {
-	margin:3px;
+  margin: 3px;
 }
 
 div.dialog-map {
-    width: 400px;
-    height: 400px;
+  width: 400px;
+  height: 400px;
 }
 
-div.server-label, div.asset-label {
-	color: blue;
-	text-align: center;
-	font-size: 28pt;
+div.server-label,
+div.asset-label {
+  color: blue;
+  text-align: center;
+  font-size: 28pt;
 }
 
 div.server-label-failure {
-	color: red;
+  color: red;
 }
 
 div.server-label-connected {
-	color: green;
+  color: green;
 }
 
-
 .server-status-label {
-	border: 1px;
+  border: 1px;
 }
 
 .server-status-value {
-	border: 1px;
+  border: 1px;
 }
 
-.asset-position-warn, .asset-battery-time-warn, .asset-search-time-warn, .asset-rtt-time-warn {
-	color: orange;
-	font-style: italic;
-	opacity: 75%;
+.asset-position-warn,
+.asset-battery-time-warn,
+.asset-search-time-warn,
+.asset-rtt-time-warn {
+  color: orange;
+  font-style: italic;
+  opacity: 75%;
 }
 
-.asset-position-old, .asset-battery-time-old, .asset-search-time-old, .asset-rtt-time-old {
-	color: red;
-	font-style: italic;
-	opacity: 25%;
+.asset-position-old,
+.asset-battery-time-old,
+.asset-search-time-old,
+.asset-rtt-time-old {
+  color: red;
+  font-style: italic;
+  opacity: 25%;
 }
 
 .asset-battery-warn {
-	background-color: orange;
-	font-weight: bold;
+  background-color: orange;
+  font-weight: bold;
 }
 
 .asset-battery-critical {
-	background-color: red;
-	font-weight: bold;
+  background-color: red;
+  font-weight: bold;
 }
