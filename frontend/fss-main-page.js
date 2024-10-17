@@ -143,7 +143,7 @@ class Goto extends ModalWithButton {
   }
 
   handleShow () {
-    this.setState(prevState => ({
+    this.setState(() => ({
       isOpen: true,
       position: this.props.asset.positionMostRecent()
     }))
