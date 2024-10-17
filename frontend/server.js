@@ -1,7 +1,7 @@
 import $ from 'jquery'
 
 export class Server {
-  constructor (serverName, address, clientPort, url) {
+  constructor(serverName, address, clientPort, url) {
     this.name = serverName
     this.address = address
     this.clientPort = clientPort
@@ -12,11 +12,11 @@ export class Server {
     this.servers = []
   }
 
-  getURL (path) {
+  getURL(path) {
     return this.url + path
   }
 
-  async updateStatus () {
+  async updateStatus() {
     const self = this
     await $.get(this.getURL('/current/all.json/'), function (data) {
       self.connected = true
