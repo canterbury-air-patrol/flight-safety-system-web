@@ -23,6 +23,9 @@ DATABASES = {
         'HOST': 'POSTGRES_SERVER',
         'NAME': 'POSTGRES_DBNAME',
         'USER': 'POSTGRES_USER',
-        'PASSWORD': 'POSTGRES_PASSWORD'
+        'PASSWORD': 'POSTGRES_PASSWORD',
+        'OPTIONS': {
+            'pool': True,
+        },
     }
 }

@@ -2,7 +2,7 @@ django
 
 django-cors-headers
 
-psycopg2-binary
+psycopg[binary,pool]==3.2.3
 
 # Code checking
 pycodestyle
