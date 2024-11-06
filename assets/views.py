@@ -1,6 +1,9 @@
 """
 Views for Assets
 """
+
+import contextlib
+
 from django.contrib.gis.geos import Point
 from django.core.exceptions import ObjectDoesNotExist
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
@@ -31,16 +34,14 @@ def asset_status_data(asset):
         }
     }
 
-    try:
+    with contextlib.suppress(ObjectDoesNotExist):
         position = AssetPosition.objects.filter(asset=asset).latest('timestamp')
         data['position'] = {
             'timestamp': position.timestamp,
             'lat': position.position.y,
             'lng': position.position.x,
         }
-    except ObjectDoesNotExist:
-        pass
-    try:
+    with contextlib.suppress(ObjectDoesNotExist):
         status = AssetStatus.objects.filter(asset=asset).latest('timestamp')
         data['status'] = {
             'timestamp': status.timestamp,
@@ -48,9 +49,7 @@ def asset_status_data(asset):
             'battery_used': status.bat_used_mah,
             'battery_voltage': status.bat_volt,
         }
-    except ObjectDoesNotExist:
-        pass
-    try:
+    with contextlib.suppress(ObjectDoesNotExist):
         search = AssetSearchProgress.objects.filter(asset=asset).latest('timestamp')
         data['search'] = {
             'timestamp': search.timestamp,
@@ -58,34 +57,9 @@ def asset_status_data(asset):
             'progress': search.search_progress,
             'total': search.search_progress_of,
         }
-    except ObjectDoesNotExist:
-        pass
-    try:
-        rtts = AssetRTT.objects.filter(asset=asset).order_by('-timestamp')[:15]
-        rtt_total = 0
-        rtt_avg = -1
-        rtt_min = -1
-        rtt_max = 0
-        count = 0
-        for rtt in rtts:
-            if rtt_min == -1:
-                rtt_min = rtt.rtt
-            rtt_min = min(rtt_min, rtt.rtt)
-            rtt_max = max(rtt_max, rtt.rtt)
-            rtt_total += rtt.rtt
-            count += 1
-        if count > 0:
-            rtt_avg = rtt_total / count
-        data['rtt'] = {
-            'timestamp': rtts[0].timestamp,
-            'rtt': rtts[0].rtt,
-            'rtt_min': rtt_min,
-            'rtt_max': rtt_max,
-            'rtt_avg': round(rtt_avg),
-        }
-    except IndexError:
-        pass
-    try:
+    with contextlib.suppress(IndexError):
+        calculate_rtt_min_max_avg(asset, data)
+    with contextlib.suppress(ObjectDoesNotExist):
         command = AssetCommand.objects.filter(asset=asset).latest('timestamp')
         data['command'] = {
             'timestamp': command.timestamp,
@@ -96,10 +70,33 @@ def asset_status_data(asset):
             data['command']['lng'] = command.position.x
         if command.altitude:
             data['command']['alt'] = command.altitude
-    except ObjectDoesNotExist:
-        pass
-
     return data
+
+
+def calculate_rtt_min_max_avg(asset, data):
+    """
+    Determine the RTT min/max/avg from the last 15 samples
+    """
+    rtts = AssetRTT.objects.filter(asset=asset).order_by('-timestamp')[:15]
+    rtt_total = 0
+    rtt_min = -1
+    rtt_max = 0
+    count = 0
+    for rtt in rtts:
+        if rtt_min == -1:
+            rtt_min = rtt.rtt
+        rtt_min = min(rtt_min, rtt.rtt)
+        rtt_max = max(rtt_max, rtt.rtt)
+        rtt_total += rtt.rtt
+        count += 1
+    rtt_avg = rtt_total / count if count > 0 else -1
+    data['rtt'] = {
+        'timestamp': rtts[0].timestamp,
+        'rtt': rtts[0].rtt,
+        'rtt_min': rtt_min,
+        'rtt_max': rtt_max,
+        'rtt_avg': round(rtt_avg),
+    }
 
 
 def asset_status_json(request, asset_id):
@@ -134,9 +131,8 @@ def asset_command_set(request, asset_id):
                 altitude = int(request.POST.get('altitude'))
             except (ValueError, TypeError):
                 error = True
-            if not error:
-                if altitude < 0 or altitude > 1000:
-                    error = True
+            if altitude < 0 or altitude > 1000:
+                error = True
             if error:
                 return HttpResponseBadRequest('Invalid Altitude')
         asset_command = AssetCommand(asset=asset, command=command,
