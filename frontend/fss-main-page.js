@@ -1,4 +1,4 @@
-import { degToDM, DMToDegrees } from './dgm'
+import { degreesToDM, DMToDegrees } from '@canterbury-air-patrol/deg-converter'
 import { Server } from './server'
 import { Asset } from './asset'
 import $ from 'jquery'
@@ -203,8 +203,8 @@ class Goto extends ModalWithButton {
     }
     return (
       <>
-        <input type="text" value={degToDM(position.lat, true)} onChange={this.handleLat}></input>
-        <input type="text" value={degToDM(position.lng, false)} onChange={this.handleLng}></input>
+        <input type="text" value={degreesToDM(position.lat, true)} onChange={this.handleLat}></input>
+        <input type="text" value={degreesToDM(position.lng, false)} onChange={this.handleLng}></input>
         <MapContainer center={position} zoom={13} className="dialog-map">
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -435,8 +435,8 @@ class FSSAssetServerStatus extends React.Component {
           </thead>
           <tbody>
             <tr>
-              <td>{degToDM(data.position.lat, true)}</td>
-              <td>{degToDM(data.position.lng, false)}</td>
+              <td>{degreesToDM(data.position.lat, true)}</td>
+              <td>{degreesToDM(data.position.lng, false)}</td>
             </tr>
           </tbody>
         </table>
@@ -496,7 +496,7 @@ class FSSAssetServerStatus extends React.Component {
     if ('command' in data) {
       commandTxt = data.command.command
       if (data.command.command === 'Goto Position') {
-        commandTxt += ` ${degToDM(data.command.lat, true)}, ${degToDM(data.command.lng)}`
+        commandTxt += ` ${degreesToDM(data.command.lat, true)}, ${degreesToDM(data.command.lng)}`
       }
       if (data.command.command === 'Adjust Altitude') {
         commandTxt += ` to ${data.command.alt}ft`
