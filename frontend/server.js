@@ -10,24 +10,30 @@ export class Server {
     this.userName = null
     this.assets = []
     this.servers = []
+
+    this.updateData = this.updateData.bind(this)
+    this.connectFailed = this.connectFailed.bind(this)
   }
 
   getURL(path) {
     return this.url + path
   }
 
+  updateData(data) {
+    this.connected = true
+    this.status = `Known Assets: ${data.assets.length}`
+    this.userName = data.currentUser
+    this.assets = data.assets
+    this.servers = data.servers
+  }
+
+  connectFailed() {
+    self.status = 'Unreachable'
+    self.connected = false
+    self.currentUser = null
+  }
+
   async updateStatus() {
-    const self = this
-    await $.get(this.getURL('/current/all.json/'), function (data) {
-      self.connected = true
-      self.status = `Known Assets: ${data.assets.length}`
-      self.userName = data.currentUser
-      self.assets = data.assets
-      self.servers = data.servers
-    }).fail(function () {
-      self.status = 'Unreachable'
-      self.connected = false
-      self.currentUser = null
-    })
+    await $.get(this.getURL('/current/all.json/'), this.updateData).fail(this.connectFailed)
   }
 }
