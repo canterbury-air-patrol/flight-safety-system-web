@@ -1,14 +1,13 @@
 import { degreesToDM, DMToDegrees } from '@canterbury-air-patrol/deg-converter'
-import { Server } from './server'
-import { Asset } from './asset'
+import { Server, ServerDetails, AssetPositionData, AssetStatus } from './server'
+import { Asset, AssetServer } from './asset'
 import $ from 'jquery'
 import 'bootstrap'
 import 'bootstrap/dist/css/bootstrap.css'
-import L from 'leaflet'
+import L, { DragEndEvent } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import './fssweb.css'
-import React from 'react'
-import PropTypes from 'prop-types'
+import React, { ReactNode } from 'react'
 
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
@@ -31,10 +30,20 @@ const searchTimeOld = 600 * 1000
 const rttTimeWarn = 10 * 1000
 const rttTimeOld = 60 * 1000
 
-class ModalWithButton extends React.Component {
-  constructor(props) {
-    super(props)
+interface ModalWithButtonProps {
+  asset: Asset
+}
 
+interface ModalWithButtonState {
+  isOpen: boolean
+}
+
+abstract class ModalWithButton<Props extends ModalWithButtonProps, State extends ModalWithButtonState> extends React.Component<Props, State> {
+  buttonLabel: string
+  buttonVariant: string
+
+  constructor(props: Props) {
+    super(props)
     this.state = {
       isOpen: false
     }
@@ -54,6 +63,10 @@ class ModalWithButton extends React.Component {
     this.setState({ isOpen: true })
   }
 
+  abstract renderModalTitle(): ReactNode
+  abstract renderModalBody(): ReactNode
+  abstract renderModalButtons(): ReactNode
+
   render() {
     return (
       <>
@@ -72,8 +85,12 @@ class ModalWithButton extends React.Component {
   }
 }
 
-class AltitudeSelect extends ModalWithButton {
-  constructor(props) {
+interface AltitudeSelectState extends ModalWithButtonState {
+  newAltitude: number
+}
+
+class AltitudeSelect extends ModalWithButton<ModalWithButtonProps, AltitudeSelectState> {
+  constructor(props: ModalWithButtonProps) {
     super(props)
 
     this.state.newAltitude = 100
@@ -85,11 +102,10 @@ class AltitudeSelect extends ModalWithButton {
     this.handleSet = this.handleSet.bind(this)
   }
 
-  handleChange(event) {
-    const target = event.target
-    const value = target.value
+  handleChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const { value } = event.target
 
-    this.setState({ newAltitude: value })
+    this.setState({ newAltitude: Number(value) })
   }
 
   handleSet() {
@@ -104,7 +120,7 @@ class AltitudeSelect extends ModalWithButton {
   renderModalBody() {
     return (
       <>
-        New Altitude: <input type="text" size="3" maxLength="3" min="0" max="999" onChange={this.handleChange} value={this.state.newAltitude}></input>ft
+        New Altitude: <input type="text" size={3} maxLength={3} min="0" max="999" onChange={this.handleChange} value={this.state.newAltitude}></input>ft
       </>
     )
   }
@@ -123,8 +139,14 @@ class AltitudeSelect extends ModalWithButton {
   }
 }
 
-class Goto extends ModalWithButton {
-  constructor(props) {
+interface GotoState extends ModalWithButtonState {
+  position?: AssetPositionData
+}
+
+class Goto extends ModalWithButton<ModalWithButtonProps, GotoState> {
+  markerRef: React.Ref<L.Marker>
+
+  constructor(props: ModalWithButtonProps) {
     super(props)
 
     this.state.position = this.props.asset.positionMostRecent()
@@ -145,47 +167,63 @@ class Goto extends ModalWithButton {
     this.dragEnd = this.dragEnd.bind(this)
   }
 
-  dragEnd(event) {
-    const target = event.target
+  dragEnd(event: DragEndEvent) {
+    const { target } = event
     const newPosition = target.getLatLng()
     this.setState({ position: newPosition })
   }
 
   handleShow() {
-    this.setState(() => ({
+    this.setState({
       isOpen: true,
       position: this.props.asset.positionMostRecent()
-    }))
+    })
   }
 
   handleGoto() {
-    this.props.asset.Goto(this.state.position.lat, this.state.position.lng)
+    if (this.state.position) {
+      this.props.asset.Goto(this.state.position.lat, this.state.position.lng)
+    }
     this.handleClose()
   }
 
-  updateLat(lat) {
+  updateLat(lat: number) {
     this.setState(function (prevState) {
-      prevState.position.lat = lat
-      return { position: prevState.position }
+      let { position } = prevState
+      if (position === undefined) {
+        position = {
+          timestamp: '',
+          lat: 0,
+          lng: 0
+        }
+      }
+      position.lat = lat
+      return { position: position }
     })
   }
 
-  updateLng(lng) {
+  updateLng(lng: number) {
     this.setState(function (prevState) {
-      prevState.position.lat = lng
-      return { position: prevState.position }
+      let { position } = prevState
+      if (position === undefined) {
+        position = {
+          timestamp: '',
+          lat: 0,
+          lng: 0
+        }
+      }
+      position.lat = lng
+      return { position: position }
     })
   }
 
-  handleLat(event) {
-    const target = event.target
-    const value = target.value
+  handleLat(event: React.ChangeEvent<HTMLInputElement>) {
+    const { value } = event.target
     this.updateLat(DMToDegrees(value))
   }
 
-  handleLng(event) {
-    const target = event.target
-    const value = target.value
+  handleLng(event: React.ChangeEvent<HTMLInputElement>) {
+    const { value } = event.target
     this.updateLng(DMToDegrees(value))
   }
 
@@ -195,8 +233,9 @@ class Goto extends ModalWithButton {
 
   renderModalBody() {
     let position = this.state.position
-    if (position === null) {
+    if (position === undefined) {
       position = {
+        timestamp: '',
         lat: 0,
         lng: 0
       }
@@ -230,8 +269,8 @@ class Goto extends ModalWithButton {
   }
 }
 
-class DisArm extends ModalWithButton {
-  constructor(props) {
+class DisArm extends ModalWithButton<ModalWithButtonProps, ModalWithButtonState> {
+  constructor(props: ModalWithButtonProps) {
     super(props)
 
     this.buttonLabel = 'DisArm'
@@ -266,12 +305,9 @@ class DisArm extends ModalWithButton {
     )
   }
 }
-DisArm.propTypes = {
-  asset: PropTypes.object.isRequired
-}
 
-class Terminate extends ModalWithButton {
-  constructor(props) {
+class Terminate extends ModalWithButton<ModalWithButtonProps, ModalWithButtonState> {
+  constructor(props: ModalWithButtonProps) {
     super(props)
 
     this.buttonLabel = 'Terminate'
@@ -329,12 +365,13 @@ class Terminate extends ModalWithButton {
     )
   }
 }
-Terminate.propTypes = {
-  asset: PropTypes.object.isRequired
+
+interface FSSAssetControlsProps {
+  asset: Asset
 }
 
-class FSSAssetControls extends React.Component {
-  constructor(props) {
+class FSSAssetControls extends React.Component<FSSAssetControlsProps, never> {
+  constructor(props: FSSAssetControlsProps) {
     super(props)
 
     this.RTL = this.RTL.bind(this)
@@ -382,12 +419,13 @@ class FSSAssetControls extends React.Component {
     )
   }
 }
-FSSAssetControls.propTypes = {
-  asset: PropTypes.object.isRequired
+
+interface FSSAssetServerStatusProps {
+  server: AssetServer
 }
 
-class FSSAssetServerStatus extends React.Component {
-  dataAgeClass(timestamp, old, warn, prefix) {
+class FSSAssetServerStatus extends React.Component<FSSAssetServerStatusProps, never> {
+  dataAgeClass(timestamp: string, old: number, warn: number, prefix: string) {
     const dbTime = new Date(timestamp)
     const timeDelta = new Date().getTime() - dbTime.getTime()
     if (timeDelta > old) {
@@ -399,9 +437,9 @@ class FSSAssetServerStatus extends React.Component {
   }
 
   render() {
-    const data = this.props.server.data
-    let rttTable = []
-    if ('rtt' in data) {
+    const { data } = this.props.server
+    let rttTable
+    if (data?.rtt) {
       rttTable = (
         <table className={'asset-rtt-status ' + this.dataAgeClass(data.rtt.timestamp, rttTimeOld, rttTimeWarn, 'asset-rtt-time')}>
           <thead>
@@ -423,8 +461,8 @@ class FSSAssetServerStatus extends React.Component {
         </table>
       )
     }
-    let posTable = []
-    if ('position' in data) {
+    let posTable
+    if (data?.position) {
       posTable = (
         <table className={'asset-positon ' + this.dataAgeClass(data.position.timestamp, assetPositionTimeOld, assetPositionTimeWarn, 'asset-position')}>
           <thead>
@@ -442,8 +480,8 @@ class FSSAssetServerStatus extends React.Component {
         </table>
       )
     }
-    let batteryTable = []
-    if ('status' in data) {
+    let batteryTable
+    if (data?.status) {
       let batteryClass = 'asset-battery-status'
       batteryClass += this.dataAgeClass(data.status.timestamp, batteryTimeOld, batteryTimeWarn, ' asset-battery-time')
 
@@ -471,8 +509,8 @@ class FSSAssetServerStatus extends React.Component {
         </table>
       )
     }
-    let searchTable = []
-    if ('search' in data) {
+    let searchTable
+    if (data?.search) {
       searchTable = (
         <table className={'asset-search-status ' + this.dataAgeClass(data.search.timestamp, searchTimeOld, searchTimeWarn, 'asset-search-time')}>
           <thead>
@@ -492,11 +530,13 @@ class FSSAssetServerStatus extends React.Component {
         </table>
       )
     }
-    let commandTxt = ''
-    if ('command' in data) {
+    let commandTxt: ReactNode = ''
+    if (data?.command) {
       commandTxt = data.command.command
       if (data.command.command === 'Goto Position') {
-        commandTxt += ` ${degreesToDM(data.command.lat, true)}, ${degreesToDM(data.command.lng)}`
+        if (data.command.lat && data.command.lng) {
+          commandTxt += ` ${degreesToDM(data.command.lat, true)}, ${degreesToDM(data.command.lng, false)}`
+        }
       }
       if (data.command.command === 'Adjust Altitude') {
         commandTxt += ` to ${data.command.alt}ft`
@@ -517,27 +557,29 @@ class FSSAssetServerStatus extends React.Component {
     )
   }
 }
-FSSAssetServerStatus.propTypes = {
-  server: PropTypes.object.isRequired
+
+interface FSSAssetStatusProps {
+  asset: Asset
+  setSelected: (asset: string, server: string) => void
 }
 
-class FSSAssetStatus extends React.Component {
-  constructor(props) {
+class FSSAssetStatus extends React.Component<FSSAssetStatusProps, never> {
+  constructor(props: FSSAssetStatusProps) {
     super(props)
 
     this.selectServer = this.selectServer.bind(this)
   }
 
-  selectServer(e) {
+  selectServer(e: React.MouseEvent<HTMLButtonElement>) {
     this.props.setSelected(this.props.asset.name, e.target.name)
   }
 
   render() {
     const serverSelector = []
-    let serverData = []
+    let serverData = <></>
     for (const s in this.props.asset.servers) {
       const server = this.props.asset.servers[s]
-      if (server.data.length !== 0) {
+      if (server.data) {
         serverSelector.push(
           <li className="nav-item" key={server.server.name}>
             <button data-toggle="tab" className="nav-link server-tab-btn" name={server.server.name} onClick={this.selectServer}>
@@ -547,7 +589,7 @@ class FSSAssetStatus extends React.Component {
         )
       }
     }
-    if (this.props.asset.selectedServer !== null) {
+    if (this.props.asset.selectedServer) {
       serverData = <FSSAssetServerStatus server={this.props.asset.selectedServer} />
     }
     return (
@@ -558,12 +600,13 @@ class FSSAssetStatus extends React.Component {
     )
   }
 }
-FSSAssetStatus.propTypes = {
-  asset: PropTypes.object.isRequired,
-  setSelected: PropTypes.func.isRequired
+
+interface FSSAssetProps {
+  asset: Asset
+  setSelected: (asset: string, server: string) => void
 }
 
-class FSSAsset extends React.Component {
+class FSSAsset extends React.Component<FSSAssetProps, never> {
   render() {
     return (
       <div className="asset">
@@ -574,12 +617,13 @@ class FSSAsset extends React.Component {
     )
   }
 }
-FSSAsset.propTypes = {
-  asset: PropTypes.object.isRequired,
-  setSelected: PropTypes.func.isRequired
+
+interface FSSAssetSetProps {
+  knownAssets: Array<Asset>
+  setSelected: (asset: string, server: string) => void
 }
 
-class FSSAssetSet extends React.Component {
+class FSSAssetSet extends React.Component<FSSAssetSetProps, never> {
   render() {
     const assets = []
     for (const a in this.props.knownAssets) {
@@ -588,12 +632,12 @@ class FSSAssetSet extends React.Component {
     return <div className="bar-assets">{assets}</div>
   }
 }
-FSSAssetSet.propTypes = {
-  knownAssets: PropTypes.array.isRequired,
-  setSelected: PropTypes.func.isRequired
+
+interface FSSServerProps {
+  server: Server
 }
 
-class FSSServer extends React.Component {
+class FSSServer extends React.Component<FSSServerProps, never> {
   render() {
     return (
       <div className="server">
@@ -612,11 +656,12 @@ class FSSServer extends React.Component {
     )
   }
 }
-FSSServer.propTypes = {
-  server: PropTypes.object.isRequired
+
+interface FSSServerBarProps {
+  knownServers: Array<Server>
 }
 
-class FSSServerBar extends React.Component {
+class FSSServerBar extends React.Component<FSSServerBarProps, never> {
   render() {
     const servers = []
     for (const s in this.props.knownServers) {
@@ -626,12 +671,16 @@ class FSSServerBar extends React.Component {
     return <div className="bar-server">{servers}</div>
   }
 }
-FSSServerBar.propTypes = {
-  knownServers: PropTypes.array.isRequired
+
+interface FSSMainPageState {
+  knownServers: Array<Server>
+  knownAssets: Array<Asset>
 }
 
-export class FSSMainPage extends React.Component {
-  constructor(props) {
+export class FSSMainPage extends React.Component<never, FSSMainPageState> {
+  timer?: number
+
+  constructor(props: never) {
     super(props)
 
     this.state = {
@@ -639,7 +688,7 @@ export class FSSMainPage extends React.Component {
       knownAssets: []
     }
 
-    this.state.knownServers.push(new Server('direct', '127.0.0.1', '0', window.location.href.slice(0, -1)))
+    this.state.knownServers.push(new Server('direct', '127.0.0.1', 0, window.location.href.slice(0, -1)))
     this.setAssetSelectedServer = this.setAssetSelectedServer.bind(this)
   }
 
@@ -651,7 +700,7 @@ export class FSSMainPage extends React.Component {
 
   componentWillUnmount() {
     clearInterval(this.timer)
-    this.timer = null
+    this.timer = undefined
   }
 
   serversUpdateKnown() {
@@ -663,9 +712,9 @@ export class FSSMainPage extends React.Component {
     }
   }
 
-  assetAdd(assetName) {
+  assetAdd(assetName: string): Asset {
     const existing = this.assetFind(assetName)
-    if (existing === null) {
+    if (existing === undefined) {
       const newAsset = new Asset(assetName)
       this.setState(function (prevState) {
         prevState.knownAssets.push(newAsset)
@@ -676,16 +725,16 @@ export class FSSMainPage extends React.Component {
     return existing
   }
 
-  assetFind(assetName) {
+  assetFind(assetName: string): Asset | undefined {
     for (const ka in this.state.knownAssets) {
       if (this.state.knownAssets[ka].name === assetName) {
         return this.state.knownAssets[ka]
       }
     }
-    return null
+    return undefined
   }
 
-  assetUpdate(assetName, server, assetData) {
+  assetUpdate(assetName: string, server: Server, assetData: AssetStatus) {
     const asset = this.assetAdd(assetName)
     const assetServer = asset.serverAdd(server, assetData.asset.pk)
     assetServer.updateData(assetData)
@@ -704,10 +753,10 @@ export class FSSMainPage extends React.Component {
     this.setState({})
   }
 
-  serverAdd(server) {
+  serverAdd(server: ServerDetails) {
     const existing = this.serverFind(server.name)
     if (existing === null) {
-      const newServer = new Server(server.name, server.address, server.client_port, server.url)
+      const newServer = new Server(server.name, server.address, server.clientPort, server.url)
       this.setState(function (prevState) {
         prevState.knownServers.push(newServer)
         return { knownServers: prevState.knownServers }
@@ -717,18 +766,18 @@ export class FSSMainPage extends React.Component {
     return existing
   }
 
-  serverFind(name) {
+  serverFind(name: string) {
     for (const ks in this.state.knownServers) {
       if (this.state.knownServers[ks].name === name) {
         return this.state.knownServers[ks]
       }
     }
-    return null
+    return undefined
   }
 
-  setAssetSelectedServer(assetName, serverName) {
+  setAssetSelectedServer(assetName: string, serverName: string) {
     const asset = this.assetFind(assetName)
-    asset.setSelected(serverName)
+    asset?.setSelected(serverName)
     this.setState({ knownAssets: this.state.knownAssets })
   }
 
