@@ -50,10 +50,7 @@ def asset_list(request):
     Return the know assets as a json array
     """
     assets = Asset.objects.filter()
-    assets_list = []
-    for asset in assets:
-        assets_list.append({'pk': asset.pk, 'name': asset.name})
-
+    assets_list = [{'pk': asset.pk, 'name': asset.name} for asset in assets]
     return JsonResponse({'assets': assets_list})
 
 
@@ -61,10 +58,7 @@ def current_user(request):
     """
     Return the current user, helps determine if the client is logged in
     """
-    if request.user.is_authenticated:
-        user = request.user.username
-    else:
-        user = None
+    user = request.user.username if request.user.is_authenticated else None
     return JsonResponse({'currentUser': user})
 
 

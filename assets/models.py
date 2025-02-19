@@ -117,10 +117,14 @@ class AssetCommand(models.Model):
         """
         Convert the command into the displayable name
         """
-        for command_choice in self.COMMAND_CHOICES:
-            if command_choice[0] == self.command:
-                return command_choice[1]
-        return self.command
+        return next(
+            (
+                command_choice[1]
+                for command_choice in self.COMMAND_CHOICES
+                if command_choice[0] == self.command
+            ),
+            self.command,
+        )
 
     class Meta:
         indexes = [
