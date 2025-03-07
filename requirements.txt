@@ -1,13 +1,13 @@
-django
+django==5.2.1
 
-django-cors-headers
+django-cors-headers==4.7.0
 
-psycopg[binary,pool]==3.2.8
+psycopg[binary,pool]==3.2.9
 
 # Code checking
-pycodestyle
-pylint==3.3.*
+pycodestyle==2.13.0
+pylint==3.3.7
 pylint-django==2.6.1
-isort
+isort==6.0.1
 
-uwsgi
+uwsgi==2.0.29
