@@ -49,7 +49,7 @@ export class Asset {
     if (serverEntry === undefined) {
       const newAssetServer = new AssetServer(server, this, pk)
       this.servers.push(newAssetServer)
-      if (this.selectedServer === null) {
+      if (!this.selectedServer) {
         this.selectedServer = newAssetServer
       }
       return newAssetServer
