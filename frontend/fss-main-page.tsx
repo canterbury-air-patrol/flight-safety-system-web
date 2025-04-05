@@ -678,12 +678,11 @@ export class FSSMainPage extends React.Component<never, FSSMainPageState> {
 
   serversUpdateKnown() {
     const { knownServers } = this.state
-    for (const ks in knownServers) {
-      const server = knownServers[ks]
-      for (const s in server.servers) {
-        this.serverAdd(server.servers[s])
-      }
-    }
+    knownServers.forEach((server: Server) => {
+      server.servers.forEach((subServer: ServerDetails) => {
+        this.serverAdd(subServer)
+      })
+    })
   }
 
   assetAdd(assetName: string): Asset {
@@ -711,11 +710,9 @@ export class FSSMainPage extends React.Component<never, FSSMainPageState> {
   async updateData() {
     this.serversUpdateKnown()
     const { knownServers } = this.state
-    for (const ks in knownServers) {
-      const server = knownServers[ks]
-      await server.updateStatus()
-      for (const a in server.assets) {
-        const asset = server.assets[a]
+    await Promise.all(knownServers.map((server: Server) => server.updateStatus()))
+    for (const server of knownServers) {
+      for (const asset of server.assets) {
         this.assetUpdate(asset.asset.name, server, asset)
       }
     }
