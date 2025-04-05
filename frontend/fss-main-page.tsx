@@ -372,6 +372,7 @@ class FSSAssetControls extends React.Component<FSSAssetControlsProps, never> {
   }
 
   render() {
+    const { asset } = this.props
     return (
       <div className="asset-buttons btn-group" role="group">
         <button className="btn btn-outline-secondary" onClick={this.RTL}>
@@ -380,16 +381,16 @@ class FSSAssetControls extends React.Component<FSSAssetControlsProps, never> {
         <button className="btn btn-outline-secondary" onClick={this.Hold}>
           Hold
         </button>
-        <AltitudeSelect asset={this.props.asset} />
-        <Goto asset={this.props.asset} />
+        <AltitudeSelect asset={asset} />
+        <Goto asset={asset} />
         <button className="btn btn-outline-secondary" onClick={this.Continue}>
           Continue
         </button>
         <button className="btn btn-info" onClick={this.Manual}>
           Manual
         </button>
-        <DisArm asset={this.props.asset} />
-        <Terminate asset={this.props.asset} />
+        <DisArm asset={asset} />
+        <Terminate asset={asset} />
       </div>
     )
   }
@@ -577,11 +578,12 @@ interface FSSAssetProps {
 
 class FSSAsset extends React.Component<FSSAssetProps, never> {
   render() {
+    const { asset } = this.props
     return (
       <div className="asset">
-        <div className="asset-label">{this.props.asset.name}</div>
-        <FSSAssetControls asset={this.props.asset} />
-        <FSSAssetStatus asset={this.props.asset} setSelected={this.props.setSelected} />
+        <div className="asset-label">{asset.name}</div>
+        <FSSAssetControls asset={asset} />
+        <FSSAssetStatus asset={asset} setSelected={this.props.setSelected} />
       </div>
     )
   }
@@ -610,19 +612,18 @@ interface FSSServerProps {
 
 class FSSServer extends React.Component<FSSServerProps, never> {
   render() {
+    const { server } = this.props
     return (
       <div className="server">
-        <div className={`server-label server-label-${this.props.server.connected ? 'connected' : 'failure'}`}>{this.props.server.name}</div>
+        <div className={`server-label server-label-${server.connected ? 'connected' : 'failure'}`}>{server.name}</div>
         <table className="server-status">
           <tbody>
             <tr>
-              <td>{this.props.server.status}</td>
+              <td>{server.status}</td>
             </tr>
           </tbody>
         </table>
-        <div className="server-login">
-          {this.props.server.userName ? `Logged in as: ${this.props.server.userName}` : <a href={this.props.server.getURL('/login/')}>Login Here</a>}
-        </div>
+        <div className="server-login">{server.userName ? `Logged in as: ${server.userName}` : <a href={server.getURL('/login/')}>Login Here</a>}</div>
       </div>
     )
   }
