@@ -549,27 +549,23 @@ class FSSAssetStatus extends React.Component<FSSAssetStatusProps, never> {
   }
 
   render() {
-    const serverSelector = []
-    let serverData = <></>
-    for (const s in this.props.asset.servers) {
-      const server = this.props.asset.servers[s]
-      if (server.data) {
-        serverSelector.push(
-          <li className="nav-item" key={server.server.name}>
-            <button data-toggle="tab" className="nav-link server-tab-btn" name={server.server.name} onClick={this.selectServer}>
-              {server.server.name}
-            </button>
-          </li>
-        )
-      }
-    }
-    if (this.props.asset.selectedServer) {
-      serverData = <FSSAssetServerStatus server={this.props.asset.selectedServer} />
-    }
+    const { asset } = this.props
     return (
       <div className="container card">
-        <ul className="nav nav-tabs server-tab-btn">{serverSelector}</ul>
-        <div className="asset-status">{serverData}</div>
+        <ul className="nav nav-tabs server-tab-btn">
+          {asset.servers.map((server) => {
+            if (server.data) {
+              return (
+                <li className="nav-item" key={server.server.name}>
+                  <button data-toggle="tab" className="nav-link server-tab-btn" name={server.server.name} onClick={this.selectServer}>
+                    {server.server.name}
+                  </button>
+                </li>
+              )
+            }
+          })}
+        </ul>
+        <div className="asset-status">{asset.selectedServer && <FSSAssetServerStatus server={asset.selectedServer} />}</div>
       </div>
     )
   }
@@ -599,11 +595,13 @@ interface FSSAssetSetProps {
 
 class FSSAssetSet extends React.Component<FSSAssetSetProps, never> {
   render() {
-    const assets = []
-    for (const a in this.props.knownAssets) {
-      assets.push(<FSSAsset key={this.props.knownAssets[a].name} asset={this.props.knownAssets[a]} setSelected={this.props.setSelected} />)
-    }
-    return <div className="bar-assets">{assets}</div>
+    return (
+      <div className="bar-assets">
+        {this.props.knownAssets.map((asset) => {
+          return <FSSAsset key={asset.name} asset={asset} setSelected={this.props.setSelected} />
+        })}
+      </div>
+    )
   }
 }
 
@@ -637,12 +635,13 @@ interface FSSServerBarProps {
 
 class FSSServerBar extends React.Component<FSSServerBarProps, never> {
   render() {
-    const servers = []
-    for (const s in this.props.knownServers) {
-      servers.push(<FSSServer server={this.props.knownServers[s]} key={this.props.knownServers[s].name} />)
-    }
-
-    return <div className="bar-server">{servers}</div>
+    return (
+      <div className="bar-server">
+        {this.props.knownServers.map((server) => {
+          return <FSSServer key={server.name} server={server} />
+        })}
+      </div>
+    )
   }
 }
 
