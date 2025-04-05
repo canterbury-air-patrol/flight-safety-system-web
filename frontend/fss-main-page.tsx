@@ -688,12 +688,11 @@ export class FSSMainPage extends React.Component<never, FSSMainPageState> {
 
   assetAdd(assetName: string): Asset {
     const existing = this.assetFind(assetName)
-    if (existing === undefined) {
+    if (!existing) {
       const newAsset = new Asset(assetName)
-      this.setState(function (prevState) {
-        prevState.knownAssets.push(newAsset)
-        return { knownAssets: prevState.knownAssets }
-      })
+      this.setState((prevState) => ({
+        knownAssets: [...prevState.knownAssets, newAsset]
+      }))
       return newAsset
     }
     return existing
@@ -731,10 +730,9 @@ export class FSSMainPage extends React.Component<never, FSSMainPageState> {
     const existing = this.serverFind(server.name)
     if (!existing) {
       const newServer = new Server(server.name, server.address, server.client_port, server.url)
-      this.setState(function (prevState) {
-        prevState.knownServers.push(newServer)
-        return { knownServers: prevState.knownServers }
-      })
+      this.setState((prevState) => ({
+        knownServers: [...prevState.knownServers, newServer]
+      }))
       return newServer
     }
     return existing
