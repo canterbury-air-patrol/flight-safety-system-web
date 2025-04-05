@@ -1,5 +1,3 @@
-import $ from 'jquery'
-
 interface AssetPositionData {
   timestamp: string
   lat: number
@@ -105,8 +103,21 @@ class Server {
     this.userName = undefined
   }
 
-  async updateStatus() {
-    await $.get(this.getURL('/current/all.json/'), this.updateData).fail(this.connectFailed)
+  updateStatus(): Promise<void> {
+    return fetch(this.getURL('/current/all.json/'))
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response.json()
+      })
+      .then(
+        (data) => {
+          this.updateData(data)
+        },
+        (error) => {
+          console.error('Error fetching server status:', error)
+          this.connectFailed()
+        }
+      )
   }
 }
 

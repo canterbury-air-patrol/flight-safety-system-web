@@ -1,5 +1,3 @@
-import $ from 'jquery'
-
 import { AssetPositionData, AssetStatus, Server } from './server'
 
 export class AssetServer {
@@ -63,8 +61,11 @@ export class Asset {
 
   sendCommand(data: { command: string }) {
     for (const s in this.servers) {
-      const url = this.servers[s].getURL('command/set/')
-      $.post(url, data)
+      fetch(this.servers[s].getURL('command/set/'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: new URLSearchParams(data as Record<string, string>)
+      })
     }
   }
 
