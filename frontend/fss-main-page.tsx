@@ -180,8 +180,9 @@ class Goto extends ModalWithButton<ModalWithButtonProps, GotoState> {
   }
 
   handleGoto() {
-    if (this.state.position) {
-      this.props.asset.Goto(this.state.position.lat, this.state.position.lng)
+    const { position } = this.state
+    if (position) {
+      this.props.asset.Goto(position.lat, position.lng)
     }
     this.handleClose()
   }
@@ -206,7 +207,7 @@ class Goto extends ModalWithButton<ModalWithButtonProps, GotoState> {
   }
 
   renderModalBody() {
-    let position = this.state.position
+    let { position } = this.state
     if (position === undefined) {
       position = {
         timestamp: '',
@@ -675,8 +676,9 @@ export class FSSMainPage extends React.Component<never, FSSMainPageState> {
   }
 
   serversUpdateKnown() {
-    for (const ks in this.state.knownServers) {
-      const server = this.state.knownServers[ks]
+    const { knownServers } = this.state
+    for (const ks in knownServers) {
+      const server = knownServers[ks]
       for (const s in server.servers) {
         this.serverAdd(server.servers[s])
       }
@@ -707,8 +709,9 @@ export class FSSMainPage extends React.Component<never, FSSMainPageState> {
 
   async updateData() {
     this.serversUpdateKnown()
-    for (const ks in this.state.knownServers) {
-      const server = this.state.knownServers[ks]
+    const { knownServers } = this.state
+    for (const ks in knownServers) {
+      const server = knownServers[ks]
       await server.updateStatus()
       for (const a in server.assets) {
         const asset = server.assets[a]
@@ -741,10 +744,11 @@ export class FSSMainPage extends React.Component<never, FSSMainPageState> {
   }
 
   render() {
+    const { knownServers, knownAssets } = this.state
     return (
       <div>
-        <FSSServerBar knownServers={this.state.knownServers} />
-        <FSSAssetSet knownAssets={this.state.knownAssets} setSelected={this.setAssetSelectedServer} />
+        <FSSServerBar knownServers={knownServers} />
+        <FSSAssetSet knownAssets={knownAssets} setSelected={this.setAssetSelectedServer} />
       </div>
     )
   }
