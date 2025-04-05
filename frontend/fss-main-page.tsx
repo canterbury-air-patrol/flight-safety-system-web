@@ -696,12 +696,7 @@ export class FSSMainPage extends React.Component<never, FSSMainPageState> {
   }
 
   assetFind(assetName: string): Asset | undefined {
-    for (const ka in this.state.knownAssets) {
-      if (this.state.knownAssets[ka].name === assetName) {
-        return this.state.knownAssets[ka]
-      }
-    }
-    return undefined
+    return this.state.knownAssets.find((asset) => asset.name === assetName)
   }
 
   assetUpdate(assetName: string, server: Server, assetData: AssetStatus) {
@@ -735,13 +730,8 @@ export class FSSMainPage extends React.Component<never, FSSMainPageState> {
     return existing
   }
 
-  serverFind(name: string) {
-    for (const ks in this.state.knownServers) {
-      if (this.state.knownServers[ks].name === name) {
-        return this.state.knownServers[ks]
-      }
-    }
-    return undefined
+  serverFind(name: string): Server | undefined {
+    return this.state.knownServers.find((server) => server.name === name)
   }
 
   setAssetSelectedServer(assetName: string, serverName: string) {
