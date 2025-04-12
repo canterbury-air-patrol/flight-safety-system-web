@@ -755,8 +755,8 @@ export class FSSMainPage extends React.Component<never, FSSMainPageState> {
 
   serverAdd(server: ServerDetails) {
     const existing = this.serverFind(server.name)
-    if (existing === null) {
-      const newServer = new Server(server.name, server.address, server.clientPort, server.url)
+    if (!existing) {
+      const newServer = new Server(server.name, server.address, server.client_port, server.url)
       this.setState(function (prevState) {
         prevState.knownServers.push(newServer)
         return { knownServers: prevState.knownServers }
