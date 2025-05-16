@@ -576,17 +576,15 @@ interface FSSAssetProps {
   setSelected: (asset: string, server: string) => void
 }
 
-class FSSAsset extends React.Component<FSSAssetProps, never> {
-  render() {
-    const { asset } = this.props
-    return (
-      <div className="asset">
-        <div className="asset-label">{asset.name}</div>
-        <FSSAssetControls asset={asset} />
-        <FSSAssetStatus asset={asset} setSelected={this.props.setSelected} />
-      </div>
-    )
-  }
+function FSSAsset(props: FSSAssetProps) {
+  const { asset } = props
+  return (
+    <div className="asset">
+      <div className="asset-label">{asset.name}</div>
+      <FSSAssetControls asset={asset} />
+      <FSSAssetStatus asset={asset} setSelected={props.setSelected} />
+    </div>
+  )
 }
 
 interface FSSAssetSetProps {
@@ -594,55 +592,51 @@ interface FSSAssetSetProps {
   setSelected: (asset: string, server: string) => void
 }
 
-class FSSAssetSet extends React.Component<FSSAssetSetProps, never> {
-  render() {
-    return (
-      <div className="bar-assets">
-        {this.props.knownAssets.map((asset) => (
-          <FSSAsset key={asset.name} asset={asset} setSelected={this.props.setSelected} />
-        ))}
-      </div>
-    )
-  }
+function FSSAssetSet(props: FSSAssetSetProps) {
+  const { knownAssets, setSelected } = props
+  return (
+    <div className="bar-assets">
+      {knownAssets.map((asset) => (
+        <FSSAsset key={asset.name} asset={asset} setSelected={setSelected} />
+      ))}
+    </div>
+  )
 }
 
 interface FSSServerProps {
   server: Server
 }
 
-class FSSServer extends React.Component<FSSServerProps, never> {
-  render() {
-    const { server } = this.props
-    return (
-      <div className="server">
-        <div className={`server-label server-label-${server.connected ? 'connected' : 'failure'}`}>{server.name}</div>
-        <table className="server-status">
-          <tbody>
-            <tr>
-              <td>{server.status}</td>
-            </tr>
-          </tbody>
-        </table>
-        <div className="server-login">{server.userName ? `Logged in as: ${server.userName}` : <a href={server.getURL('/login/')}>Login Here</a>}</div>
-      </div>
-    )
-  }
+function FSSServer(props: FSSServerProps) {
+  const { server } = props
+  return (
+    <div className="server">
+      <div className={`server-label server-label-${server.connected ? 'connected' : 'failure'}`}>{server.name}</div>
+      <table className="server-status">
+        <tbody>
+          <tr>
+            <td>{server.status}</td>
+          </tr>
+        </tbody>
+      </table>
+      <div className="server-login">{server.userName ? `Logged in as: ${server.userName}` : <a href={server.getURL('/login/')}>Login Here</a>}</div>
+    </div>
+  )
 }
 
 interface FSSServerBarProps {
   knownServers: Array<Server>
 }
 
-class FSSServerBar extends React.Component<FSSServerBarProps, never> {
-  render() {
-    return (
-      <div className="bar-server">
-        {this.props.knownServers.map((server) => (
-          <FSSServer key={server.name} server={server} />
-        ))}
-      </div>
-    )
-  }
+function FSSServerBar(props: FSSServerBarProps) {
+  const { knownServers } = props
+  return (
+    <div className="bar-server">
+      {knownServers.map((server) => (
+        <FSSServer key={server.name} server={server} />
+      ))}
+    </div>
+  )
 }
 
 interface FSSMainPageState {
