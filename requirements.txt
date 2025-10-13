@@ -10,4 +10,4 @@ pylint==3.3.9
 pylint-django==2.6.1
 isort==6.1.0
 
-uwsgi==2.0.30
+uwsgi==2.0.31
