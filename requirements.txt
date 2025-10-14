@@ -6,7 +6,7 @@ psycopg[binary,pool]==3.2.10
 
 # Code checking
 pycodestyle==2.14.0
-pylint==3.3.9
+pylint==4.0.0
 pylint-django==2.6.1
 isort==6.1.0
 
