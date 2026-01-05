@@ -8,6 +8,6 @@ psycopg[binary,pool]==3.3.2
 pycodestyle==2.14.0
 pylint==4.0.4
 pylint-django==2.7.0
-isort==6.1.0
+isort==7.0.0
 
 uwsgi==2.0.31
