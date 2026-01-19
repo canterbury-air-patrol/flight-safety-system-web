@@ -20,7 +20,7 @@
     "bootstrap": "^5.3.8",
     "esbuild": "^0.27.2",
     "esbuild-config": "^1.0.1",
-    "jquery": "^3.7.1",
+    "jquery": "^4.0.0",
     "leaflet": "^1.9.4",
     "react": "^19.2.3",
     "react-bootstrap": "^2.10.10",
