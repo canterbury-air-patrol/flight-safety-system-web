@@ -18,7 +18,7 @@
   "dependencies": {
     "@canterbury-air-patrol/deg-converter": "^0.2.0",
     "bootstrap": "^5.3.8",
-    "esbuild": "^0.27.4",
+    "esbuild": "^0.28.0",
     "esbuild-config": "^1.0.1",
     "jquery": "^4.0.0",
     "leaflet": "^1.9.4",
