@@ -17,7 +17,10 @@ services:
       - DJANGO_SUPERUSER_PASSWORD=administrator
       - DJANGO_SUPERUSER_EMAIL=me@example.com
   db:
-    image: mdillon/postgis
+    image: postgis/postgis:18-3.6-alpine
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
     healthcheck:
       test: "pg_isready --username=postgres"
       timeout: 10s
