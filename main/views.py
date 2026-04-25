@@ -16,7 +16,7 @@ def main_view(request):
     """
     The default landing page
     """
-    return render(request, 'main/main.html', {request: request})
+    return render(request, 'main/main.html')
 
 
 def status_view(request):
