@@ -12,10 +12,11 @@ def config_main(request):
     """
     Main configuration page
     """
-    assets = Asset.objects.all()
+    assets = list(Asset.objects.all())
+    configs_by_asset_id = {c.asset_id: c for c in AssetConfig.objects.filter(asset__in=assets)}
 
     for asset in assets:
-        asset.config = AssetConfig.objects.get(asset=asset)
+        asset.config = configs_by_asset_id.get(asset.id)
 
     data = {
         'FSSservers': ServerConfig.objects.all(),

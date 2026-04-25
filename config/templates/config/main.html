@@ -57,8 +57,12 @@
 {% for asset in Assets %}
 <tr>
 <td>{{ asset.name }}</td>
+{% if asset.config %}
 <td>{{ asset.config.smm.name }}</td>
 <td>{{ asset.config.smm_login }}</td>
+{% else %}
+<td colspan="2">No config</td>
+{% endif %}
 </tr>
 {% endfor %}
 </table>
