@@ -113,19 +113,6 @@ class AssetCommand(models.Model):
     def __str__(self):
         return f"Command {self.asset} to {self.get_command_display()}"
 
-    def get_command_display(self):
-        """
-        Convert the command into the displayable name
-        """
-        return next(
-            (
-                command_choice[1]
-                for command_choice in self.COMMAND_CHOICES
-                if command_choice[0] == self.command
-            ),
-            self.command,
-        )
-
     class Meta:
         indexes = [
             models.Index(fields=['asset', 'timestamp', ]),
