@@ -7,4 +7,3 @@ if [[ "x$USERID" != "x" ]] && [[ "x$GROUPID" != "x" ]]
 then
 	chown $USERID:$GROUPID -R dist node_modules
 fi
-cp -dpR dist/* main/static/
