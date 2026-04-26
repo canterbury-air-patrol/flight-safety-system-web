@@ -162,8 +162,7 @@ class Goto extends ModalWithButton<ModalWithButtonProps, GotoState> {
 
     this.handleShow = this.handleShow.bind(this)
     this.handleGoto = this.handleGoto.bind(this)
-    this.handleLat = this.handleLat.bind(this)
-    this.handleLng = this.handleLng.bind(this)
+    this.handlePositionChange = this.handlePositionChange.bind(this)
     this.dragEnd = this.dragEnd.bind(this)
   }
 
@@ -187,44 +186,19 @@ class Goto extends ModalWithButton<ModalWithButtonProps, GotoState> {
     this.handleClose()
   }
 
-  updateLat(lat: number) {
-    this.setState(function (prevState) {
-      let { position } = prevState
-      if (position === undefined) {
-        position = {
-          timestamp: '',
-          lat: 0,
-          lng: 0
+  handlePositionChange(event: React.ChangeEvent<HTMLInputElement>, isLat: boolean) {
+    const { value } = event.target
+    const positionValue = DMToDegrees(value)
+
+    this.setState((prevState) => {
+      const currentPosition = prevState.position || { timestamp: '', lat: 0, lng: 0 }
+      return {
+        position: {
+          ...currentPosition,
+          [isLat ? 'lat' : 'lng']: positionValue
         }
       }
-      position.lat = lat
-      return { position: position }
     })
-  }
-
-  updateLng(lng: number) {
-    this.setState(function (prevState) {
-      let { position } = prevState
-      if (position === undefined) {
-        position = {
-          timestamp: '',
-          lat: 0,
-          lng: 0
-        }
-      }
-      position.lat = lng
-      return { position: position }
-    })
-  }
-
-  handleLat(event: React.ChangeEvent<HTMLInputElement>) {
-    const { value } = event.target
-    this.updateLat(DMToDegrees(value))
-  }
-
-  handleLng(event: React.ChangeEvent<HTMLInputElement>) {
-    const { value } = event.target
-    this.updateLng(DMToDegrees(value))
   }
 
   renderModalTitle() {
@@ -242,8 +216,8 @@ class Goto extends ModalWithButton<ModalWithButtonProps, GotoState> {
     }
     return (
       <>
-        <input type="text" value={degreesToDM(position.lat, true)} onChange={this.handleLat}></input>
-        <input type="text" value={degreesToDM(position.lng, false)} onChange={this.handleLng}></input>
+        <input type="text" value={degreesToDM(position.lat, true)} onChange={(e) => this.handlePositionChange(e, true)}></input>
+        <input type="text" value={degreesToDM(position.lng, false)} onChange={(e) => this.handlePositionChange(e, false)}></input>
         <MapContainer center={position} zoom={13} className="dialog-map">
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
