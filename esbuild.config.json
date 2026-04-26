@@ -4,7 +4,7 @@
         "frontend/pretty.tsx"
     ],
     "bundle": true,
-    "minify": false,
+    "minify": true,
     "outdir": "dist",
     "loader": {
         ".js": "jsx",
