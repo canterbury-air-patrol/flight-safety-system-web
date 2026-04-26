@@ -4,10 +4,4 @@ django-cors-headers==4.9.0
 
 psycopg[binary,pool]==3.3.4
 
-# Code checking
-pycodestyle==2.14.0
-pylint==4.0.5
-pylint-django==2.7.0
-isort==8.0.1
-
 uwsgi==2.0.31

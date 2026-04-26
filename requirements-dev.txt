@@ -1,0 +1,5 @@
+# Code checking
+pycodestyle==2.14.0
+pylint==4.0.5
+pylint-django==2.7.0
+isort==8.0.1
