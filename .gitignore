@@ -8,3 +8,4 @@ fss/local_settings.py
 fss/secretkey.txt
 node_modules/
 dist/
+.vscode/
