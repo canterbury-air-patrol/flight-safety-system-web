@@ -34,12 +34,7 @@ export class Asset {
   }
 
   serverFind(name: string): AssetServer | undefined {
-    for (const s in this.servers) {
-      if (this.servers[s].server.name === name) {
-        return this.servers[s]
-      }
-    }
-    return undefined
+    return this.servers.find((s) => s.server.name === name)
   }
 
   serverAdd(server: Server, pk: number): AssetServer {
@@ -114,14 +109,12 @@ export class Asset {
   }
 
   positionMostRecent(): AssetPositionData | undefined {
-    let position = undefined
-    for (const s in this.servers) {
-      const serverEntry = this.servers[s]
-      if (serverEntry.data && serverEntry.data.position && (position === undefined || serverEntry.data.position.timestamp > position.timestamp)) {
-        position = serverEntry.data.position
-      }
-    }
-    return position
+    return this.servers.reduce<AssetPositionData | undefined>((best, s) => {
+      const pos = s.data?.position
+      if (!pos) return best
+      if (!best || pos.timestamp > best.timestamp) return pos
+      return best
+    }, undefined)
   }
 
   setSelected(serverName: string) {
