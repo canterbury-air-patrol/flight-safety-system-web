@@ -1,7 +1,6 @@
 import { degreesToDM, DMToDegrees } from '@canterbury-air-patrol/deg-converter'
 import { Server, ServerDetails, AssetPositionData, AssetStatus } from './server'
 import { Asset, AssetServer } from './asset'
-import $ from 'jquery'
 import 'bootstrap'
 import 'bootstrap/dist/css/bootstrap.css'
 import L, { DragEndEvent } from 'leaflet'
@@ -661,7 +660,6 @@ export class FSSMainPage extends React.Component<never, FSSMainPageState> {
 
   componentDidMount() {
     this.updateData()
-    $.ajaxSetup({ timeout: 2500 })
     this.timer = setInterval(() => this.updateData(), 3000)
   }
 
