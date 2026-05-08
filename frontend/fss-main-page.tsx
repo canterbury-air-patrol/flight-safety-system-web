@@ -402,36 +402,27 @@ interface FSSAssetStatusProps {
   setSelected: (asset: string, server: string) => void
 }
 
-class FSSAssetStatus extends React.Component<FSSAssetStatusProps, never> {
-  constructor(props: FSSAssetStatusProps) {
-    super(props)
-
-    this.selectServer = this.selectServer.bind(this)
+const FSSAssetStatus: React.FC<FSSAssetStatusProps> = ({ asset, setSelected }) => {
+  const selectServer = (e: React.MouseEvent<HTMLButtonElement>) => {
+    setSelected(asset.name, e.currentTarget.name)
   }
 
-  selectServer(e: React.MouseEvent<HTMLButtonElement>) {
-    this.props.setSelected(this.props.asset.name, e.target.name)
-  }
-
-  render() {
-    const { asset } = this.props
-    return (
-      <div className="container card">
-        <ul className="nav nav-tabs server-tab-btn">
-          {asset.servers
-            .filter((server) => server.data)
-            .map((server) => (
-              <li className="nav-item" key={server.server.name}>
-                <button data-toggle="tab" className="nav-link server-tab-btn" name={server.server.name} onClick={this.selectServer}>
-                  {server.server.name}
-                </button>
-              </li>
-            ))}
-        </ul>
-        <div className="asset-status">{asset.selectedServer && <FSSAssetServerStatus server={asset.selectedServer} />}</div>
-      </div>
-    )
-  }
+  return (
+    <div className="container card">
+      <ul className="nav nav-tabs server-tab-btn">
+        {asset.servers
+          .filter((server) => server.data)
+          .map((server) => (
+            <li className="nav-item" key={server.server.name}>
+              <button data-toggle="tab" className="nav-link server-tab-btn" name={server.server.name} onClick={selectServer}>
+                {server.server.name}
+              </button>
+            </li>
+          ))}
+      </ul>
+      <div className="asset-status">{asset.selectedServer && <FSSAssetServerStatus server={asset.selectedServer} />}</div>
+    </div>
+  )
 }
 
 interface FSSAssetProps {
