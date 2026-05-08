@@ -1,12 +1,12 @@
 import { degreesToDM, DMToDegrees } from '@canterbury-air-patrol/deg-converter'
-import { Server, ServerDetails, AssetPositionData, AssetStatus } from './server'
+import { Server, AssetPositionData } from './server'
 import { Asset, AssetServer } from './asset'
 import 'bootstrap'
 import 'bootstrap/dist/css/bootstrap.css'
 import L, { DragEndEvent } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import './fssweb.css'
-import React, { ReactNode, useState } from 'react'
+import React, { ReactNode, useState, useEffect, useRef, useCallback } from 'react'
 
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
@@ -493,111 +493,63 @@ function FSSServerBar(props: FSSServerBarProps) {
   )
 }
 
-interface FSSMainPageState {
-  knownServers: Array<Server>
-  knownAssets: Array<Asset>
-}
+export const FSSMainPage: React.FC = () => {
+  const [knownServers, setKnownServers] = useState<Server[]>([new Server('direct', '127.0.0.1', 0, window.location.href.slice(0, -1))])
+  const [knownAssets, setKnownAssets] = useState<Asset[]>([])
 
-export class FSSMainPage extends React.Component<never, FSSMainPageState> {
-  timer?: number
+  // Latest-value refs so useCallback below can always read current state without
+  // listing the state arrays as deps (which would restart the interval on every update)
+  const knownServersRef = useRef(knownServers)
+  const knownAssetsRef = useRef(knownAssets)
+  knownServersRef.current = knownServers
+  knownAssetsRef.current = knownAssets
 
-  constructor(props: never) {
-    super(props)
-
-    this.state = {
-      knownServers: [],
-      knownAssets: []
-    }
-
-    this.state.knownServers.push(new Server('direct', '127.0.0.1', 0, window.location.href.slice(0, -1)))
-    this.setAssetSelectedServer = this.setAssetSelectedServer.bind(this)
-  }
-
-  componentDidMount() {
-    this.updateData()
-    this.timer = setInterval(() => this.updateData(), 3000)
-  }
-
-  componentWillUnmount() {
-    clearInterval(this.timer)
-    this.timer = undefined
-  }
-
-  serversUpdateKnown() {
-    const { knownServers } = this.state
-    for (const ks in knownServers) {
-      const server = knownServers[ks]
-      for (const s in server.servers) {
-        this.serverAdd(server.servers[s])
+  const updateData = useCallback(async () => {
+    let servers = knownServersRef.current
+    for (const server of [...servers]) {
+      for (const s of server.servers) {
+        if (!servers.find((srv) => srv.name === s.name)) {
+          servers = [...servers, new Server(s.name, s.address, s.client_port, s.url)]
+        }
       }
     }
-  }
 
-  assetAdd(assetName: string): Asset {
-    const existing = this.assetFind(assetName)
-    if (!existing) {
-      const newAsset = new Asset(assetName)
-      this.setState((prevState) => ({
-        knownAssets: [...prevState.knownAssets, newAsset]
-      }))
-      return newAsset
-    }
-    return existing
-  }
-
-  assetFind(assetName: string): Asset | undefined {
-    return this.state.knownAssets.find((asset) => asset.name === assetName)
-  }
-
-  assetUpdate(assetName: string, server: Server, assetData: AssetStatus) {
-    const asset = this.assetAdd(assetName)
-    const assetServer = asset.serverAdd(server, assetData.asset.pk)
-    assetServer.updateData(assetData)
-  }
-
-  async updateData() {
-    this.serversUpdateKnown()
-    const { knownServers } = this.state
-    for (const ks in knownServers) {
-      const server = knownServers[ks]
+    let assets = knownAssetsRef.current
+    for (const server of servers) {
       await server.updateStatus()
-      for (const a in server.assets) {
-        const asset = server.assets[a]
-        this.assetUpdate(asset.asset.name, server, asset)
+      for (const assetData of server.assets) {
+        let asset = assets.find((a) => a.name === assetData.asset.name)
+        if (!asset) {
+          asset = new Asset(assetData.asset.name)
+          assets = [...assets, asset]
+        }
+        const assetServer = asset.serverAdd(server, assetData.asset.pk)
+        assetServer.updateData(assetData)
       }
     }
-    this.setState({})
+
+    setKnownServers([...servers])
+    setKnownAssets([...assets])
+  }, [])
+
+  useEffect(() => {
+    updateData()
+    const timer = setInterval(() => updateData(), 3000)
+    return () => clearInterval(timer)
+  }, [updateData])
+
+  const setAssetSelectedServer = (assetName: string, serverName: string) => {
+    setKnownAssets((prev) => {
+      const asset = prev.find((a) => a.name === assetName)
+      asset?.setSelected(serverName)
+      return [...prev]
+    })
   }
 
-  serverAdd(server: ServerDetails) {
-    const existing = this.serverFind(server.name)
-    if (!existing) {
-      const newServer = new Server(server.name, server.address, server.client_port, server.url)
-      this.setState((prevState) => ({
-        knownServers: [...prevState.knownServers, newServer]
-      }))
-      return newServer
-    }
-    return existing
-  }
-
-  serverFind(name: string): Server | undefined {
-    return this.state.knownServers.find((server) => server.name === name)
-  }
-
-  setAssetSelectedServer(assetName: string, serverName: string) {
-    const asset = this.assetFind(assetName)
-    asset?.setSelected(serverName)
-    this.setState({ knownAssets: this.state.knownAssets })
-  }
-
-  render() {
-    const { knownServers, knownAssets } = this.state
-    return (
-      <div>
-        <FSSServerBar knownServers={knownServers} />
-        <FSSAssetSet knownAssets={knownAssets} setSelected={this.setAssetSelectedServer} />
-      </div>
-    )
-  }
+  return (
+    <div>
+      <FSSServerBar knownServers={knownServers} />
+      <FSSAssetSet knownAssets={knownAssets} setSelected={setAssetSelectedServer} />
+    </div>
+  )
 }
