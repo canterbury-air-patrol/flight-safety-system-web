@@ -6,7 +6,7 @@ import 'bootstrap/dist/css/bootstrap.css'
 import L, { DragEndEvent } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import './fssweb.css'
-import React, { ReactNode } from 'react'
+import React, { ReactNode, useState } from 'react'
 
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
@@ -29,315 +29,213 @@ const searchTimeOld = 600 * 1000
 const rttTimeWarn = 10 * 1000
 const rttTimeOld = 60 * 1000
 
+L.Icon.Default.prototype.options.iconUrl = markerIcon
+L.Icon.Default.prototype.options.iconRetinaUrl = markerIcon2x
+L.Icon.Default.prototype.options.shadowUrl = markerIconShadow
+
 interface ModalWithButtonProps {
-  asset: Asset
+  label: string
+  variant: string
+  title: ReactNode
+  body: ReactNode
+  footer: (onClose: () => void) => ReactNode
+  onShow?: () => void
 }
 
-interface ModalWithButtonState {
-  isOpen: boolean
+const ModalWithButton: React.FC<ModalWithButtonProps> = ({ label, variant, title, body, footer, onShow }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const handleClose = () => setIsOpen(false)
+  const handleShow = () => {
+    if (onShow) onShow()
+    setIsOpen(true)
+  }
+
+  return (
+    <>
+      <Button onClick={handleShow} variant={variant}>
+        {label}
+      </Button>
+      <Modal show={isOpen} onHide={handleClose}>
+        <Modal.Header>
+          <Modal.Title>{title}</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>{body}</Modal.Body>
+        <Modal.Footer>{footer(handleClose)}</Modal.Footer>
+      </Modal>
+    </>
+  )
 }
 
-abstract class ModalWithButton<Props extends ModalWithButtonProps, State extends ModalWithButtonState> extends React.Component<Props, State> {
-  buttonLabel: string
-  buttonVariant: string
+const AltitudeSelect: React.FC<{ asset: Asset }> = ({ asset }) => {
+  const [newAltitude, setNewAltitude] = useState(100)
 
-  constructor(props: Props) {
-    super(props)
-    this.state = {
-      isOpen: false
-    }
-
-    this.buttonLabel = 'Unlabelled'
-    this.buttonVariant = 'primary'
-
-    this.handleClose = this.handleClose.bind(this)
-    this.handleShow = this.handleShow.bind(this)
+  const handleSet = (onClose: () => void) => {
+    asset.Altitude(newAltitude)
+    onClose()
   }
 
-  handleClose() {
-    this.setState({ isOpen: false })
-  }
-
-  handleShow() {
-    this.setState({ isOpen: true })
-  }
-
-  abstract renderModalTitle(): ReactNode
-  abstract renderModalBody(): ReactNode
-  abstract renderModalButtons(): ReactNode
-
-  render() {
-    return (
-      <>
-        <Button onClick={this.handleShow} variant={this.buttonVariant}>
-          {this.buttonLabel}
-        </Button>
-        <Modal show={this.state.isOpen} onHide={this.handleClose}>
-          <Modal.Header>
-            <Modal.Title>{this.renderModalTitle()}</Modal.Title>
-          </Modal.Header>
-          <Modal.Body>{this.renderModalBody()}</Modal.Body>
-          <Modal.Footer>{this.renderModalButtons()}</Modal.Footer>
-        </Modal>
-      </>
-    )
-  }
+  return (
+    <ModalWithButton
+      label="Altitude"
+      variant="outline-secondary"
+      title="Set Target Altitude:"
+      body={
+        <>
+          New Altitude: <input type="text" size={3} maxLength={3} min="0" max="999" onChange={(e) => setNewAltitude(Number(e.target.value))} value={newAltitude}></input>
+          ft
+        </>
+      }
+      footer={(onClose) => (
+        <>
+          <Button variant="light" onClick={() => handleSet(onClose)}>
+            Set Altitude
+          </Button>
+          <Button variant="primary" onClick={onClose}>
+            Cancel
+          </Button>
+        </>
+      )}
+    />
+  )
 }
 
-interface AltitudeSelectState extends ModalWithButtonState {
-  newAltitude: number
-}
+const Goto: React.FC<{ asset: Asset }> = ({ asset }) => {
+  const [position, setPosition] = useState<AssetPositionData | undefined>(undefined)
 
-class AltitudeSelect extends ModalWithButton<ModalWithButtonProps, AltitudeSelectState> {
-  constructor(props: ModalWithButtonProps) {
-    super(props)
-
-    this.state.newAltitude = 100
-
-    this.buttonLabel = 'Altitude'
-    this.buttonVariant = 'outline-secondary'
-
-    this.handleChange = this.handleChange.bind(this)
-    this.handleSet = this.handleSet.bind(this)
+  const onShow = () => {
+    setPosition(asset.positionMostRecent())
   }
 
-  handleChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const { value } = event.target
-
-    this.setState({ newAltitude: Number(value) })
-  }
-
-  handleSet() {
-    this.props.asset.Altitude(this.state.newAltitude)
-    this.handleClose()
-  }
-
-  renderModalTitle() {
-    return <>Set Target Altitude:</>
-  }
-
-  renderModalBody() {
-    return (
-      <>
-        New Altitude: <input type="text" size={3} maxLength={3} min="0" max="999" onChange={this.handleChange} value={this.state.newAltitude}></input>ft
-      </>
-    )
-  }
-
-  renderModalButtons() {
-    return (
-      <>
-        <Button variant="light" onClick={this.handleSet}>
-          Set Altitude
-        </Button>
-        <Button variant="primary" onClick={this.handleClose}>
-          Cancel
-        </Button>
-      </>
-    )
-  }
-}
-
-interface GotoState extends ModalWithButtonState {
-  position?: AssetPositionData
-}
-
-class Goto extends ModalWithButton<ModalWithButtonProps, GotoState> {
-  markerRef: React.Ref<L.Marker>
-
-  constructor(props: ModalWithButtonProps) {
-    super(props)
-
-    this.state.position = this.props.asset.positionMostRecent()
-
-    this.markerRef = null
-
-    L.Icon.Default.prototype.options.iconUrl = markerIcon
-    L.Icon.Default.prototype.options.iconRetinaUrl = markerIcon2x
-    L.Icon.Default.prototype.options.shadowUrl = markerIconShadow
-
-    this.buttonLabel = 'Goto'
-    this.buttonVariant = 'outline-secondary'
-
-    this.handleShow = this.handleShow.bind(this)
-    this.handleGoto = this.handleGoto.bind(this)
-    this.handlePositionChange = this.handlePositionChange.bind(this)
-    this.dragEnd = this.dragEnd.bind(this)
-  }
-
-  dragEnd(event: DragEndEvent) {
-    const { target } = event
-    const newPosition = target.getLatLng()
-    this.setState({ position: newPosition })
-  }
-
-  handleShow() {
-    this.setState({
-      isOpen: true,
-      position: this.props.asset.positionMostRecent()
-    })
-  }
-
-  handleGoto() {
-    const { position } = this.state
+  const handleGoto = (onClose: () => void) => {
     if (position) {
-      this.props.asset.Goto(position.lat, position.lng)
+      asset.Goto(position.lat, position.lng)
     }
-    this.handleClose()
+    onClose()
   }
 
-  handlePositionChange(event: React.ChangeEvent<HTMLInputElement>, isLat: boolean) {
+  const handlePositionChange = (event: React.ChangeEvent<HTMLInputElement>, isLat: boolean) => {
     const { value } = event.target
     const positionValue = DMToDegrees(value)
-
-    this.setState((prevState) => {
-      const currentPosition = prevState.position || { timestamp: '', lat: 0, lng: 0 }
-      return {
-        position: {
-          ...currentPosition,
-          [isLat ? 'lat' : 'lng']: positionValue
-        }
-      }
+    setPosition((prev) => {
+      const current = prev || { timestamp: '', lat: 0, lng: 0 }
+      return { ...current, [isLat ? 'lat' : 'lng']: positionValue }
     })
   }
 
-  renderModalTitle() {
-    return <>Send {this.props.asset.name} to:</>
+  const dragEnd = (event: DragEndEvent) => {
+    setPosition(event.target.getLatLng())
   }
 
-  renderModalBody() {
-    let { position } = this.state
-    if (position === undefined) {
-      position = {
-        timestamp: '',
-        lat: 0,
-        lng: 0
+  const pos = position || { timestamp: '', lat: 0, lng: 0 }
+
+  return (
+    <ModalWithButton
+      label="Goto"
+      variant="outline-secondary"
+      onShow={onShow}
+      title={<>Send {asset.name} to:</>}
+      body={
+        <>
+          <input type="text" value={degreesToDM(pos.lat, true)} onChange={(e) => handlePositionChange(e, true)}></input>
+          <input type="text" value={degreesToDM(pos.lng, false)} onChange={(e) => handlePositionChange(e, false)}></input>
+          <MapContainer center={pos} zoom={13} className="dialog-map">
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <Marker draggable={true} eventHandlers={{ dragend: dragEnd }} position={pos} />
+          </MapContainer>
+        </>
       }
-    }
-    return (
-      <>
-        <input type="text" value={degreesToDM(position.lat, true)} onChange={(e) => this.handlePositionChange(e, true)}></input>
-        <input type="text" value={degreesToDM(position.lng, false)} onChange={(e) => this.handlePositionChange(e, false)}></input>
-        <MapContainer center={position} zoom={13} className="dialog-map">
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          <Marker draggable={true} eventHandlers={{ dragend: this.dragEnd }} position={position} ref={this.markerRef} />
-        </MapContainer>
-      </>
-    )
-  }
-
-  renderModalButtons() {
-    return (
-      <>
-        <Button variant="light" onClick={this.handleGoto}>
-          Goto
-        </Button>
-        <Button variant="primary" onClick={this.handleClose}>
-          Cancel
-        </Button>
-      </>
-    )
-  }
+      footer={(onClose) => (
+        <>
+          <Button variant="light" onClick={() => handleGoto(onClose)}>
+            Goto
+          </Button>
+          <Button variant="primary" onClick={onClose}>
+            Cancel
+          </Button>
+        </>
+      )}
+    />
+  )
 }
 
-class DisArm extends ModalWithButton<ModalWithButtonProps, ModalWithButtonState> {
-  constructor(props: ModalWithButtonProps) {
-    super(props)
-
-    this.buttonLabel = 'DisArm'
-    this.buttonVariant = 'danger'
-
-    this.handleDisArm = this.handleDisArm.bind(this)
-  }
-
-  handleDisArm() {
-    this.props.asset.DisArm()
-    this.handleClose()
-  }
-
-  renderModalTitle() {
-    return <>Disarm {this.props.asset.name}</>
-  }
-
-  renderModalBody() {
-    return <>Warning this will probably result in the aircraft crashing. Use only when all other options are unsafe.</>
-  }
-
-  renderModalButtons() {
-    return (
-      <>
-        <Button variant="danger" onClick={this.handleDisArm}>
-          DisArm
-        </Button>
-        <Button variant="primary" onClick={this.handleClose}>
-          Cancel
-        </Button>
-      </>
-    )
-  }
+const DisArm: React.FC<{ asset: Asset }> = ({ asset }) => {
+  return (
+    <ModalWithButton
+      label="DisArm"
+      variant="danger"
+      title={<>Disarm {asset.name}</>}
+      body={<>Warning this will probably result in the aircraft crashing. Use only when all other options are unsafe.</>}
+      footer={(onClose) => (
+        <>
+          <Button
+            variant="danger"
+            onClick={() => {
+              asset.DisArm()
+              onClose()
+            }}
+          >
+            DisArm
+          </Button>
+          <Button variant="primary" onClick={onClose}>
+            Cancel
+          </Button>
+        </>
+      )}
+    />
+  )
 }
 
-class Terminate extends ModalWithButton<ModalWithButtonProps, ModalWithButtonState> {
-  constructor(props: ModalWithButtonProps) {
-    super(props)
-
-    this.buttonLabel = 'Terminate'
-    this.buttonVariant = 'danger'
-
-    this.handleTerminate = this.handleTerminate.bind(this)
-    this.handleRTL = this.handleRTL.bind(this)
-    this.handleHold = this.handleHold.bind(this)
-  }
-
-  handleTerminate() {
-    this.props.asset.Terminate()
-    this.handleClose()
-  }
-
-  handleRTL() {
-    this.props.asset.RTL()
-    this.handleClose()
-  }
-
-  handleHold() {
-    this.props.asset.Hold()
-    this.handleClose()
-  }
-
-  renderModalTitle() {
-    return <>Terminate {this.props.asset.name}</>
-  }
-
-  renderModalBody() {
-    return (
-      <>
-        Warning this will cause the aircraft to immediately terminate flight and most certainly destroy it. Ensure the area directly under the aircraft is free of any people and
-        property. Use RTL or Hold instead.
-      </>
-    )
-  }
-
-  renderModalButtons() {
-    return (
-      <>
-        <Button variant="danger" onClick={this.handleTerminate}>
-          Terminate Flight
-        </Button>
-        <Button variant="light" onClick={this.handleRTL}>
-          RTL
-        </Button>
-        <Button variant="light" onClick={this.handleHold}>
-          Hold
-        </Button>
-        <Button variant="primary" onClick={this.handleClose}>
-          Cancel
-        </Button>
-      </>
-    )
-  }
+const Terminate: React.FC<{ asset: Asset }> = ({ asset }) => {
+  return (
+    <ModalWithButton
+      label="Terminate"
+      variant="danger"
+      title={<>Terminate {asset.name}</>}
+      body={
+        <>
+          Warning this will cause the aircraft to immediately terminate flight and most certainly destroy it. Ensure the area directly under the aircraft is free of any people and
+          property. Use RTL or Hold instead.
+        </>
+      }
+      footer={(onClose) => (
+        <>
+          <Button
+            variant="danger"
+            onClick={() => {
+              asset.Terminate()
+              onClose()
+            }}
+          >
+            Terminate Flight
+          </Button>
+          <Button
+            variant="light"
+            onClick={() => {
+              asset.RTL()
+              onClose()
+            }}
+          >
+            RTL
+          </Button>
+          <Button
+            variant="light"
+            onClick={() => {
+              asset.Hold()
+              onClose()
+            }}
+          >
+            Hold
+          </Button>
+          <Button variant="primary" onClick={onClose}>
+            Cancel
+          </Button>
+        </>
+      )}
+    />
+  )
 }
 
 interface FSSAssetControlsProps {
