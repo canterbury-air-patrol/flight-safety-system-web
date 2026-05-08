@@ -40,6 +40,7 @@ def asset_status_data(asset):
             'timestamp': position.timestamp,
             'lat': position.position.y,
             'lng': position.position.x,
+            'alt': position.altitude,
         }
     with contextlib.suppress(ObjectDoesNotExist):
         status = AssetStatus.objects.filter(asset=asset).latest('timestamp')
