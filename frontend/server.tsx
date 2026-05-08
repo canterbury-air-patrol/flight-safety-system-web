@@ -2,6 +2,7 @@ interface AssetPositionData {
   timestamp: string
   lat: number
   lng: number
+  alt?: number
 }
 
 interface AssetStatusData {

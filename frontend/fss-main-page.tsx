@@ -103,6 +103,8 @@ const AltitudeSelect: React.FC<AssetProps> = ({ asset }) => {
   )
 }
 
+const getDefaultPosition = (): AssetPositionData => ({ timestamp: '', lat: 0, lng: 0 })
+
 const Goto: React.FC<AssetProps> = ({ asset }) => {
   const [position, setPosition] = useState<AssetPositionData | undefined>(undefined)
 
@@ -121,16 +123,21 @@ const Goto: React.FC<AssetProps> = ({ asset }) => {
     const { value } = event.target
     const positionValue = DMToDegrees(value)
     setPosition((prev) => {
-      const current = prev || { timestamp: '', lat: 0, lng: 0 }
+      const current = prev || getDefaultPosition()
       return { ...current, [isLat ? 'lat' : 'lng']: positionValue }
     })
   }
 
   const dragEnd = (event: DragEndEvent) => {
-    setPosition(event.target.getLatLng())
+    const latLng = event.target.getLatLng()
+    setPosition((prev) => ({
+      ...(prev || getDefaultPosition()),
+      lat: latLng.lat,
+      lng: latLng.lng
+    }))
   }
 
-  const pos = position || { timestamp: '', lat: 0, lng: 0 }
+  const pos = position || getDefaultPosition()
 
   return (
     <ModalWithButton
@@ -309,12 +316,14 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServer }> = ({ server }) => 
           <tr>
             <td>Latitude</td>
             <td>Longitude</td>
+            <td>Altitude (ft)</td>
           </tr>
         </thead>
         <tbody>
           <tr>
             <td>{degreesToDM(data.position.lat, true)}</td>
             <td>{degreesToDM(data.position.lng, false)}</td>
+            <td>{data.position.alt ?? 'N/A'}</td>
           </tr>
         </tbody>
       </table>
