@@ -265,142 +265,136 @@ const FSSAssetControls: React.FC<AssetProps> = ({ asset }) => {
   )
 }
 
-interface FSSAssetServerStatusProps {
-  server: AssetServer
+const dataAgeClass = (timestamp: string, old: number, warn: number, prefix: string) => {
+  const dbTime = new Date(timestamp)
+  const timeDelta = new Date().getTime() - dbTime.getTime()
+  if (timeDelta > old) {
+    return `${prefix}-old`
+  } else if (timeDelta > warn) {
+    return `${prefix}-warn`
+  }
+  return ''
 }
 
-class FSSAssetServerStatus extends React.Component<FSSAssetServerStatusProps, never> {
-  dataAgeClass(timestamp: string, old: number, warn: number, prefix: string) {
-    const dbTime = new Date(timestamp)
-    const timeDelta = new Date().getTime() - dbTime.getTime()
-    if (timeDelta > old) {
-      return `${prefix}-old`
-    } else if (timeDelta > warn) {
-      return `${prefix}-warn`
-    }
-    return ''
-  }
-
-  render() {
-    const { data } = this.props.server
-    let rttTable
-    if (data?.rtt) {
-      rttTable = (
-        <table className={'asset-rtt-status ' + this.dataAgeClass(data.rtt.timestamp, rttTimeOld, rttTimeWarn, 'asset-rtt-time')}>
-          <thead>
-            <tr>
-              <td>RTT (ms)</td>
-              <td>min</td>
-              <td>max</td>
-              <td>avg</td>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="asset-rtt">{data.rtt.rtt}</td>
-              <td className="asset-rtt">{data.rtt.rtt_min}</td>
-              <td className="asset-rtt">{data.rtt.rtt_max}</td>
-              <td className="asset-rtt">{data.rtt.rtt_avg}</td>
-            </tr>
-          </tbody>
-        </table>
-      )
-    }
-    let posTable
-    if (data?.position) {
-      posTable = (
-        <table className={'asset-positon ' + this.dataAgeClass(data.position.timestamp, assetPositionTimeOld, assetPositionTimeWarn, 'asset-position')}>
-          <thead>
-            <tr>
-              <td>Latitude</td>
-              <td>Longitude</td>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>{degreesToDM(data.position.lat, true)}</td>
-              <td>{degreesToDM(data.position.lng, false)}</td>
-            </tr>
-          </tbody>
-        </table>
-      )
-    }
-    let batteryTable
-    if (data?.status) {
-      let batteryClass = 'asset-battery-status'
-      batteryClass += this.dataAgeClass(data.status.timestamp, batteryTimeOld, batteryTimeWarn, ' asset-battery-time')
-
-      if (data.status.battery_percent < batteryCritical) {
-        batteryClass += ' asset-battery-critical'
-      } else if (data.status.battery_percent < batteryWarn) {
-        batteryClass += ' asset-battery-warn'
-      }
-      batteryTable = (
-        <table className={batteryClass}>
-          <thead>
-            <tr>
-              <td>Remaining %</td>
-              <td>Used (mAh)</td>
-              <td>Voltage</td>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>{data.status.battery_percent}</td>
-              <td>{data.status.battery_used}</td>
-              <td>{data.status.battery_voltage}</td>
-            </tr>
-          </tbody>
-        </table>
-      )
-    }
-    let searchTable
-    if (data?.search) {
-      searchTable = (
-        <table className={'asset-search-status ' + this.dataAgeClass(data.search.timestamp, searchTimeOld, searchTimeWarn, 'asset-search-time')}>
-          <thead>
-            <tr>
-              <td>Search</td>
-              <td>Completed</td>
-              <td>Total</td>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>{data.search.id}</td>
-              <td>{data.search.progress}</td>
-              <td>{data.search.total}</td>
-            </tr>
-          </tbody>
-        </table>
-      )
-    }
-    let commandTxt: ReactNode = ''
-    if (data?.command) {
-      commandTxt = data.command.command
-      if (data.command.command === 'Goto Position') {
-        if (data.command.lat && data.command.lng) {
-          commandTxt += ` ${degreesToDM(data.command.lat, true)}, ${degreesToDM(data.command.lng, false)}`
-        }
-      }
-      if (data.command.command === 'Adjust Altitude') {
-        commandTxt += ` to ${data.command.alt}ft`
-      }
-      if (data.command.command === 'Manual') {
-        commandTxt = <strong>Take Manual Control Now</strong>
-      }
-    }
-    return (
-      <div className="asset-status-server">
-        <div className="asset-status-server-label">{this.props.server.server.name}</div>
-        <div className="asset-status-command">{commandTxt}</div>
-        {rttTable}
-        {posTable}
-        {batteryTable}
-        {searchTable}
-      </div>
+const FSSAssetServerStatus: React.FC<{ server: AssetServer }> = ({ server }) => {
+  const { data } = server
+  let rttTable
+  if (data?.rtt) {
+    rttTable = (
+      <table className={'asset-rtt-status ' + dataAgeClass(data.rtt.timestamp, rttTimeOld, rttTimeWarn, 'asset-rtt-time')}>
+        <thead>
+          <tr>
+            <td>RTT (ms)</td>
+            <td>min</td>
+            <td>max</td>
+            <td>avg</td>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td className="asset-rtt">{data.rtt.rtt}</td>
+            <td className="asset-rtt">{data.rtt.rtt_min}</td>
+            <td className="asset-rtt">{data.rtt.rtt_max}</td>
+            <td className="asset-rtt">{data.rtt.rtt_avg}</td>
+          </tr>
+        </tbody>
+      </table>
     )
   }
+  let posTable
+  if (data?.position) {
+    posTable = (
+      <table className={'asset-positon ' + dataAgeClass(data.position.timestamp, assetPositionTimeOld, assetPositionTimeWarn, 'asset-position')}>
+        <thead>
+          <tr>
+            <td>Latitude</td>
+            <td>Longitude</td>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{degreesToDM(data.position.lat, true)}</td>
+            <td>{degreesToDM(data.position.lng, false)}</td>
+          </tr>
+        </tbody>
+      </table>
+    )
+  }
+  let batteryTable
+  if (data?.status) {
+    let batteryClass = 'asset-battery-status'
+    batteryClass += dataAgeClass(data.status.timestamp, batteryTimeOld, batteryTimeWarn, ' asset-battery-time')
+
+    if (data.status.battery_percent < batteryCritical) {
+      batteryClass += ' asset-battery-critical'
+    } else if (data.status.battery_percent < batteryWarn) {
+      batteryClass += ' asset-battery-warn'
+    }
+    batteryTable = (
+      <table className={batteryClass}>
+        <thead>
+          <tr>
+            <td>Remaining %</td>
+            <td>Used (mAh)</td>
+            <td>Voltage</td>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{data.status.battery_percent}</td>
+            <td>{data.status.battery_used}</td>
+            <td>{data.status.battery_voltage}</td>
+          </tr>
+        </tbody>
+      </table>
+    )
+  }
+  let searchTable
+  if (data?.search) {
+    searchTable = (
+      <table className={'asset-search-status ' + dataAgeClass(data.search.timestamp, searchTimeOld, searchTimeWarn, 'asset-search-time')}>
+        <thead>
+          <tr>
+            <td>Search</td>
+            <td>Completed</td>
+            <td>Total</td>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>{data.search.id}</td>
+            <td>{data.search.progress}</td>
+            <td>{data.search.total}</td>
+          </tr>
+        </tbody>
+      </table>
+    )
+  }
+  let commandTxt: ReactNode = ''
+  if (data?.command) {
+    commandTxt = data.command.command
+    if (data.command.command === 'Goto Position') {
+      if (data.command.lat && data.command.lng) {
+        commandTxt += ` ${degreesToDM(data.command.lat, true)}, ${degreesToDM(data.command.lng, false)}`
+      }
+    }
+    if (data.command.command === 'Adjust Altitude') {
+      commandTxt += ` to ${data.command.alt}ft`
+    }
+    if (data.command.command === 'Manual') {
+      commandTxt = <strong>Take Manual Control Now</strong>
+    }
+  }
+  return (
+    <div className="asset-status-server">
+      <div className="asset-status-server-label">{server.server.name}</div>
+      <div className="asset-status-command">{commandTxt}</div>
+      {rttTable}
+      {posTable}
+      {batteryTable}
+      {searchTable}
+    </div>
+  )
 }
 
 interface FSSAssetStatusProps {
