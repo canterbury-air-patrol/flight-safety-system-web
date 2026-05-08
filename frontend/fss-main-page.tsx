@@ -66,7 +66,11 @@ const ModalWithButton: React.FC<ModalWithButtonProps> = ({ label, variant, title
   )
 }
 
-const AltitudeSelect: React.FC<{ asset: Asset }> = ({ asset }) => {
+interface AssetProps {
+  asset: Asset
+}
+
+const AltitudeSelect: React.FC<AssetProps> = ({ asset }) => {
   const [newAltitude, setNewAltitude] = useState(100)
 
   const handleSet = (onClose: () => void) => {
@@ -99,7 +103,7 @@ const AltitudeSelect: React.FC<{ asset: Asset }> = ({ asset }) => {
   )
 }
 
-const Goto: React.FC<{ asset: Asset }> = ({ asset }) => {
+const Goto: React.FC<AssetProps> = ({ asset }) => {
   const [position, setPosition] = useState<AssetPositionData | undefined>(undefined)
 
   const onShow = () => {
@@ -161,7 +165,7 @@ const Goto: React.FC<{ asset: Asset }> = ({ asset }) => {
   )
 }
 
-const DisArm: React.FC<{ asset: Asset }> = ({ asset }) => {
+const DisArm: React.FC<AssetProps> = ({ asset }) => {
   return (
     <ModalWithButton
       label="DisArm"
@@ -188,7 +192,7 @@ const DisArm: React.FC<{ asset: Asset }> = ({ asset }) => {
   )
 }
 
-const Terminate: React.FC<{ asset: Asset }> = ({ asset }) => {
+const Terminate: React.FC<AssetProps> = ({ asset }) => {
   return (
     <ModalWithButton
       label="Terminate"
@@ -238,59 +242,27 @@ const Terminate: React.FC<{ asset: Asset }> = ({ asset }) => {
   )
 }
 
-interface FSSAssetControlsProps {
-  asset: Asset
-}
-
-class FSSAssetControls extends React.Component<FSSAssetControlsProps, never> {
-  constructor(props: FSSAssetControlsProps) {
-    super(props)
-
-    this.RTL = this.RTL.bind(this)
-    this.Hold = this.Hold.bind(this)
-    this.Continue = this.Continue.bind(this)
-    this.Manual = this.Manual.bind(this)
-  }
-
-  RTL() {
-    this.props.asset.RTL()
-  }
-
-  Hold() {
-    this.props.asset.Hold()
-  }
-
-  Continue() {
-    this.props.asset.Continue()
-  }
-
-  Manual() {
-    this.props.asset.Manual()
-  }
-
-  render() {
-    const { asset } = this.props
-    return (
-      <div className="asset-buttons btn-group" role="group">
-        <button className="btn btn-outline-secondary" onClick={this.RTL}>
-          RTL
-        </button>
-        <button className="btn btn-outline-secondary" onClick={this.Hold}>
-          Hold
-        </button>
-        <AltitudeSelect asset={asset} />
-        <Goto asset={asset} />
-        <button className="btn btn-outline-secondary" onClick={this.Continue}>
-          Continue
-        </button>
-        <button className="btn btn-info" onClick={this.Manual}>
-          Manual
-        </button>
-        <DisArm asset={asset} />
-        <Terminate asset={asset} />
-      </div>
-    )
-  }
+const FSSAssetControls: React.FC<AssetProps> = ({ asset }) => {
+  return (
+    <div className="asset-buttons btn-group" role="group">
+      <button className="btn btn-outline-secondary" onClick={() => asset.RTL()}>
+        RTL
+      </button>
+      <button className="btn btn-outline-secondary" onClick={() => asset.Hold()}>
+        Hold
+      </button>
+      <AltitudeSelect asset={asset} />
+      <Goto asset={asset} />
+      <button className="btn btn-outline-secondary" onClick={() => asset.Continue()}>
+        Continue
+      </button>
+      <button className="btn btn-info" onClick={() => asset.Manual()}>
+        Manual
+      </button>
+      <DisArm asset={asset} />
+      <Terminate asset={asset} />
+    </div>
+  )
 }
 
 interface FSSAssetServerStatusProps {
