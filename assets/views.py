@@ -69,7 +69,7 @@ def asset_status_data(asset):
         if command.position:
             data['command']['lat'] = command.position.y
             data['command']['lng'] = command.position.x
-        if command.altitude:
+        if command.altitude is not None:
             data['command']['alt'] = command.altitude
     return data
 
