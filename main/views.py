@@ -7,7 +7,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from assets.models import Asset
-from assets.views import asset_status_data
+from assets.views import bulk_asset_status_data
 from config.models import ServerConfig
 
 
@@ -101,7 +101,6 @@ def all_status_data(request):
         data['servers'].append(server_details)
 
     assets = Asset.objects.all()
-    for asset in assets:
-        data['assets'].append(asset_status_data(asset))
+    data['assets'] = bulk_asset_status_data(assets)
 
     return JsonResponse(data)
