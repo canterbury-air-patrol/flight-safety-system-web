@@ -55,8 +55,8 @@ export class Asset {
   }
 
   sendCommand(data: { command: string }) {
-    for (const s in this.servers) {
-      fetch(this.servers[s].getURL('command/set/'), {
+    for (const s of this.servers) {
+      fetch(s.getURL('command/set/'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
         body: new URLSearchParams(data as Record<string, string>)
