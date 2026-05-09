@@ -1,5 +1,12 @@
 import { AssetPositionData, AssetStatus, Server } from './server'
 
+export type Command = 'GOTO' | 'ALT' | 'RTL' | 'HOLD' | 'RON' | 'DISARM' | 'TERM' | 'MAN'
+
+export type CommandPayload =
+  | { command: 'GOTO'; latitude: number; longitude: number }
+  | { command: 'ALT'; altitude: number }
+  | { command: Extract<Command, 'RTL' | 'HOLD' | 'RON' | 'DISARM' | 'TERM' | 'MAN'> }
+
 export class AssetServer {
   server: Server
   asset: Asset
@@ -54,58 +61,50 @@ export class Asset {
     return this.servers.length
   }
 
-  sendCommand(data: { command: string }) {
+  sendCommand(data: CommandPayload) {
     for (const s of this.servers) {
       fetch(s.getURL('command/set/'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-        body: new URLSearchParams(data as Record<string, string>)
+        body: new URLSearchParams(Object.entries(data).map(([k, v]) => [k, String(v)]))
       })
     }
   }
 
   RTL() {
-    const data = { command: 'RTL' }
-    this.sendCommand(data)
+    this.sendCommand({ command: 'RTL' })
   }
 
   Hold() {
-    const data = { command: 'HOLD' }
-    this.sendCommand(data)
+    this.sendCommand({ command: 'HOLD' })
   }
 
   Continue() {
-    const data = { command: 'RON' }
-    this.sendCommand(data)
+    this.sendCommand({ command: 'RON' })
   }
 
   Goto(lat: number, lng: number) {
-    const data = {
+    this.sendCommand({
       command: 'GOTO',
       latitude: lat,
       longitude: lng
-    }
-    this.sendCommand(data)
+    })
   }
 
   Altitude(alt: number) {
-    const data = { command: 'ALT', altitude: alt }
-    this.sendCommand(data)
+    this.sendCommand({ command: 'ALT', altitude: alt })
   }
 
   DisArm() {
-    const data = { command: 'DISARM' }
-    this.sendCommand(data)
+    this.sendCommand({ command: 'DISARM' })
   }
 
   Terminate() {
-    const data = { command: 'TERM' }
-    this.sendCommand(data)
+    this.sendCommand({ command: 'TERM' })
   }
 
   Manual() {
-    const data = { command: 'MAN' }
-    this.sendCommand(data)
+    this.sendCommand({ command: 'MAN' })
   }
 
   positionMostRecent(): AssetPositionData | undefined {
