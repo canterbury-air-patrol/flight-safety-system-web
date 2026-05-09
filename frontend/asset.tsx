@@ -1,4 +1,4 @@
-import { AssetPositionData, AssetStatus, Server } from './server'
+import { AssetPositionData, AssetStatus, ServerState, getServerURL } from './server'
 
 export type Command = 'GOTO' | 'ALT' | 'RTL' | 'HOLD' | 'RON' | 'DISARM' | 'TERM' | 'MAN'
 
@@ -7,116 +7,93 @@ export type CommandPayload =
   | { command: 'ALT'; altitude: number }
   | { command: Extract<Command, 'RTL' | 'HOLD' | 'RON' | 'DISARM' | 'TERM' | 'MAN'> }
 
-export class AssetServer {
-  server: Server
-  asset: Asset
-  pk: number
+export interface AssetServerState {
+  serverName: string
+  assetPk: number
   data?: AssetStatus
+}
 
-  constructor(server: Server, asset: Asset, pk: number) {
-    this.server = server
-    this.asset = asset
-    this.pk = pk
-    this.data = undefined
-  }
+export interface AssetState {
+  name: string
+  selectedServerName?: string
+  servers: Record<string, AssetServerState>
+}
 
-  getURL(path: string) {
-    return this.server.getURL(`/assets/${this.pk}/${path}`)
-  }
+export const createAsset = (name: string): AssetState => ({
+  name,
+  servers: {}
+})
 
-  updateData(assetData: AssetStatus) {
-    this.data = assetData
+export const getAssetServerURL = (server: ServerState, assetServer: AssetServerState, path: string) => getServerURL(server, `/assets/${assetServer.assetPk}/${path}`)
+
+export const sendAssetCommand = (knownServers: Record<string, ServerState>, asset: AssetState, data: CommandPayload) => {
+  for (const assetServer of Object.values(asset.servers)) {
+    const server = knownServers[assetServer.serverName]
+    if (!server) continue
+    fetch(getAssetServerURL(server, assetServer, 'command/set/'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+      body: new URLSearchParams(Object.entries(data).map(([k, v]) => [k, String(v)]))
+    })
   }
 }
 
-export class Asset {
+export const assetPositionMostRecent = (asset: AssetState): AssetPositionData | undefined => {
+  let best: AssetPositionData | undefined
+  for (const assetServer of Object.values(asset.servers)) {
+    const pos = assetServer.data?.position
+    if (!pos) continue
+    if (!best || pos.timestamp > best.timestamp) {
+      best = pos
+    }
+  }
+  return best
+}
+
+export const mergeServerAssets = (currentAssets: Record<string, AssetState>, serverName: string, assets: AssetStatus[]): Record<string, AssetState> => {
+  const nextAssets = { ...currentAssets }
+  for (const assetData of assets) {
+    const assetName = assetData.asset.name
+    const existing = nextAssets[assetName] ?? createAsset(assetName)
+    const assetServer: AssetServerState = {
+      serverName,
+      assetPk: assetData.asset.pk,
+      data: assetData
+    }
+    nextAssets[assetName] = {
+      ...existing,
+      servers: { ...existing.servers, [serverName]: assetServer },
+      selectedServerName: existing.selectedServerName ?? serverName
+    }
+  }
+  return nextAssets
+}
+
+export interface AssetController {
   name: string
-  selectedServer?: AssetServer
-  servers: Array<AssetServer>
+  RTL(): void
+  Hold(): void
+  Continue(): void
+  Goto(lat: number, lng: number): void
+  Altitude(alt: number): void
+  DisArm(): void
+  Terminate(): void
+  Manual(): void
+  positionMostRecent(): AssetPositionData | undefined
+}
 
-  constructor(assetName: string) {
-    this.name = assetName
-    this.selectedServer = undefined
-    this.servers = []
-  }
-
-  serverFind(name: string): AssetServer | undefined {
-    return this.servers.find((s) => s.server.name === name)
-  }
-
-  serverAdd(server: Server, pk: number): AssetServer {
-    const serverEntry = this.serverFind(server.name)
-    if (serverEntry === undefined) {
-      const newAssetServer = new AssetServer(server, this, pk)
-      this.servers.push(newAssetServer)
-      if (!this.selectedServer) {
-        this.selectedServer = newAssetServer
-      }
-      return newAssetServer
-    }
-    return serverEntry
-  }
-
-  getServerCount() {
-    return this.servers.length
-  }
-
-  sendCommand(data: CommandPayload) {
-    for (const s of this.servers) {
-      fetch(s.getURL('command/set/'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
-        body: new URLSearchParams(Object.entries(data).map(([k, v]) => [k, String(v)]))
-      })
-    }
-  }
-
-  RTL() {
-    this.sendCommand({ command: 'RTL' })
-  }
-
-  Hold() {
-    this.sendCommand({ command: 'HOLD' })
-  }
-
-  Continue() {
-    this.sendCommand({ command: 'RON' })
-  }
-
-  Goto(lat: number, lng: number) {
-    this.sendCommand({
-      command: 'GOTO',
-      latitude: lat,
-      longitude: lng
-    })
-  }
-
-  Altitude(alt: number) {
-    this.sendCommand({ command: 'ALT', altitude: alt })
-  }
-
-  DisArm() {
-    this.sendCommand({ command: 'DISARM' })
-  }
-
-  Terminate() {
-    this.sendCommand({ command: 'TERM' })
-  }
-
-  Manual() {
-    this.sendCommand({ command: 'MAN' })
-  }
-
-  positionMostRecent(): AssetPositionData | undefined {
-    return this.servers.reduce<AssetPositionData | undefined>((best, s) => {
-      const pos = s.data?.position
-      if (!pos) return best
-      if (!best || pos.timestamp > best.timestamp) return pos
-      return best
-    }, undefined)
-  }
-
-  setSelected(serverName: string) {
-    this.selectedServer = this.serverFind(serverName)
+export const createAssetController = (knownServers: Record<string, ServerState>, asset: AssetState): AssetController => {
+  const send = (data: CommandPayload) => sendAssetCommand(knownServers, asset, data)
+  return {
+    name: asset.name,
+    RTL: () => send({ command: 'RTL' }),
+    Hold: () => send({ command: 'HOLD' }),
+    Continue: () => send({ command: 'RON' }),
+    Goto: (latitude, longitude) => send({ command: 'GOTO', latitude, longitude }),
+    Altitude: (altitude) => send({ command: 'ALT', altitude }),
+    DisArm: () => send({ command: 'DISARM' }),
+    Terminate: () => send({ command: 'TERM' }),
+    Manual: () => send({ command: 'MAN' }),
+    positionMostRecent: () => assetPositionMostRecent(asset)
   }
 }

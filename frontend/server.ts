@@ -1,25 +1,25 @@
-interface AssetPositionData {
+export interface AssetPositionData {
   timestamp: string
   lat: number
   lng: number
   alt?: number
 }
 
-interface AssetStatusData {
+export interface AssetStatusData {
   timestamp: string
   battery_percent: number
   battery_used: number
   battery_voltage: number
 }
 
-interface AssetSearchData {
+export interface AssetSearchData {
   timestamp: string
   id: number
   progress: number
   total: number
 }
 
-interface AssetRTTData {
+export interface AssetRTTData {
   timestamp: string
   rtt: number
   rtt_min: number
@@ -27,7 +27,7 @@ interface AssetRTTData {
   rtt_avg: number
 }
 
-interface AssetCommandData {
+export interface AssetCommandData {
   timestamp: string
   command: string
   lat?: number
@@ -35,7 +35,7 @@ interface AssetCommandData {
   alt?: number
 }
 
-interface AssetStatus {
+export interface AssetStatus {
   asset: {
     name: string
     pk: number
@@ -47,20 +47,20 @@ interface AssetStatus {
   command?: AssetCommandData
 }
 
-interface ServerDetails {
+export interface ServerDetails {
   name: string
   address: string
   client_port: number
   url: string
 }
 
-interface StatusData {
+export interface StatusData {
   currentUser?: string
   servers: Array<ServerDetails>
   assets: Array<AssetStatus>
 }
 
-class Server {
+export interface ServerState {
   name: string
   address: string
   clientPort: number
@@ -70,56 +70,43 @@ class Server {
   status: string
   assets: Array<AssetStatus>
   servers: Array<ServerDetails>
-
-  constructor(serverName: string, address: string, clientPort: number, url: string) {
-    this.name = serverName
-    this.address = address
-    this.clientPort = clientPort
-    this.url = url
-    this.connected = false
-    this.userName = undefined
-    this.status = 'Connecting ...'
-    this.assets = []
-    this.servers = []
-
-    this.updateData = this.updateData.bind(this)
-    this.connectFailed = this.connectFailed.bind(this)
-  }
-
-  getURL(path: string) {
-    return this.url + path
-  }
-
-  updateData(data: StatusData) {
-    this.connected = true
-    this.status = `Known Assets: ${data.assets.length}`
-    this.userName = data.currentUser
-    this.assets = data.assets
-    this.servers = data.servers
-  }
-
-  connectFailed() {
-    this.status = 'Unreachable'
-    this.connected = false
-    this.userName = undefined
-  }
-
-  updateStatus(): Promise<void> {
-    return fetch(this.getURL('/current/all.json/'))
-      .then((response) => {
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        return response.json()
-      })
-      .then(
-        (data) => {
-          this.updateData(data)
-        },
-        (error) => {
-          console.error('Error fetching server status:', error)
-          this.connectFailed()
-        }
-      )
-  }
 }
 
-export { Server, ServerDetails, AssetPositionData, AssetStatus }
+export const createServer = (name: string, address: string, clientPort: number, url: string): ServerState => ({
+  name,
+  address,
+  clientPort,
+  url,
+  connected: false,
+  status: 'Connecting ...',
+  assets: [],
+  servers: []
+})
+
+export const getServerURL = (server: ServerState, path: string) => server.url + path
+
+export const updateServerData = (server: ServerState, data: StatusData): ServerState => ({
+  ...server,
+  connected: true,
+  status: `Known Assets: ${data.assets.length}`,
+  userName: data.currentUser,
+  assets: data.assets,
+  servers: data.servers
+})
+
+export const serverConnectFailed = (server: ServerState): ServerState => ({
+  ...server,
+  status: 'Unreachable',
+  connected: false,
+  userName: undefined
+})
+
+export const mergeServerPollResult = (currentServers: Record<string, ServerState>, serverName: string, data: StatusData): Record<string, ServerState> => {
+  const nextServers = { ...currentServers, [serverName]: updateServerData(currentServers[serverName], data) }
+  for (const s of data.servers) {
+    if (!nextServers[s.name]) {
+      nextServers[s.name] = createServer(s.name, s.address, s.client_port, s.url)
+    }
+  }
+  return nextServers
+}

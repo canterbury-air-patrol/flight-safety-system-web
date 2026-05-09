@@ -1,12 +1,12 @@
 import { degreesToDM, DMToDegrees } from '@canterbury-air-patrol/deg-converter'
-import { Server, AssetPositionData } from './server'
-import { Asset, AssetServer } from './asset'
+import { AssetState, AssetServerState, AssetController, createAssetController, mergeServerAssets } from './asset'
+import { ServerState, createServer, getServerURL, serverConnectFailed, AssetPositionData, mergeServerPollResult } from './server'
 import 'bootstrap'
 import 'bootstrap/dist/css/bootstrap.css'
 import L, { DragEndEvent } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import './fssweb.css'
-import React, { ReactNode, useState, useEffect, useRef, useCallback } from 'react'
+import React, { ReactNode, useState, useEffect, useRef, useCallback, useMemo } from 'react'
 
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
@@ -67,14 +67,14 @@ const ModalWithButton: React.FC<ModalWithButtonProps> = ({ label, variant, title
 }
 
 interface AssetProps {
-  asset: Asset
+  controller: AssetController
 }
 
-const AltitudeSelect: React.FC<AssetProps> = ({ asset }) => {
+const AltitudeSelect: React.FC<AssetProps> = ({ controller }) => {
   const [newAltitude, setNewAltitude] = useState(100)
 
   const handleSet = (onClose: () => void) => {
-    asset.Altitude(newAltitude)
+    controller.Altitude(newAltitude)
     onClose()
   }
 
@@ -105,16 +105,16 @@ const AltitudeSelect: React.FC<AssetProps> = ({ asset }) => {
 
 const getDefaultPosition = (): AssetPositionData => ({ timestamp: '', lat: 0, lng: 0 })
 
-const Goto: React.FC<AssetProps> = ({ asset }) => {
+const Goto: React.FC<AssetProps> = ({ controller }) => {
   const [position, setPosition] = useState<AssetPositionData | undefined>(undefined)
 
   const onShow = () => {
-    setPosition(asset.positionMostRecent())
+    setPosition(controller.positionMostRecent())
   }
 
   const handleGoto = (onClose: () => void) => {
     if (position) {
-      asset.Goto(position.lat, position.lng)
+      controller.Goto(position.lat, position.lng)
     }
     onClose()
   }
@@ -144,7 +144,7 @@ const Goto: React.FC<AssetProps> = ({ asset }) => {
       label="Goto"
       variant="outline-secondary"
       onShow={onShow}
-      title={<>Send {asset.name} to:</>}
+      title={<>Send {controller.name} to:</>}
       body={
         <>
           <input type="text" value={degreesToDM(pos.lat, true)} onChange={(e) => handlePositionChange(e, true)}></input>
@@ -172,19 +172,19 @@ const Goto: React.FC<AssetProps> = ({ asset }) => {
   )
 }
 
-const DisArm: React.FC<AssetProps> = ({ asset }) => {
+const DisArm: React.FC<AssetProps> = ({ controller }) => {
   return (
     <ModalWithButton
       label="DisArm"
       variant="danger"
-      title={<>Disarm {asset.name}</>}
+      title={<>Disarm {controller.name}</>}
       body={<>Warning this will probably result in the aircraft crashing. Use only when all other options are unsafe.</>}
       footer={(onClose) => (
         <>
           <Button
             variant="danger"
             onClick={() => {
-              asset.DisArm()
+              controller.DisArm()
               onClose()
             }}
           >
@@ -199,12 +199,12 @@ const DisArm: React.FC<AssetProps> = ({ asset }) => {
   )
 }
 
-const Terminate: React.FC<AssetProps> = ({ asset }) => {
+const Terminate: React.FC<AssetProps> = ({ controller }) => {
   return (
     <ModalWithButton
       label="Terminate"
       variant="danger"
-      title={<>Terminate {asset.name}</>}
+      title={<>Terminate {controller.name}</>}
       body={
         <>
           Warning this will cause the aircraft to immediately terminate flight and most certainly destroy it. Ensure the area directly under the aircraft is free of any people and
@@ -216,7 +216,7 @@ const Terminate: React.FC<AssetProps> = ({ asset }) => {
           <Button
             variant="danger"
             onClick={() => {
-              asset.Terminate()
+              controller.Terminate()
               onClose()
             }}
           >
@@ -225,7 +225,7 @@ const Terminate: React.FC<AssetProps> = ({ asset }) => {
           <Button
             variant="light"
             onClick={() => {
-              asset.RTL()
+              controller.RTL()
               onClose()
             }}
           >
@@ -234,7 +234,7 @@ const Terminate: React.FC<AssetProps> = ({ asset }) => {
           <Button
             variant="light"
             onClick={() => {
-              asset.Hold()
+              controller.Hold()
               onClose()
             }}
           >
@@ -249,25 +249,25 @@ const Terminate: React.FC<AssetProps> = ({ asset }) => {
   )
 }
 
-const FSSAssetControls: React.FC<AssetProps> = ({ asset }) => {
+const FSSAssetControls: React.FC<AssetProps> = ({ controller }) => {
   return (
     <div className="asset-buttons btn-group" role="group">
-      <button className="btn btn-outline-secondary" onClick={() => asset.RTL()}>
+      <button className="btn btn-outline-secondary" onClick={controller.RTL}>
         RTL
       </button>
-      <button className="btn btn-outline-secondary" onClick={() => asset.Hold()}>
+      <button className="btn btn-outline-secondary" onClick={controller.Hold}>
         Hold
       </button>
-      <AltitudeSelect asset={asset} />
-      <Goto asset={asset} />
-      <button className="btn btn-outline-secondary" onClick={() => asset.Continue()}>
+      <AltitudeSelect controller={controller} />
+      <Goto controller={controller} />
+      <button className="btn btn-outline-secondary" onClick={controller.Continue}>
         Continue
       </button>
-      <button className="btn btn-info" onClick={() => asset.Manual()}>
+      <button className="btn btn-info" onClick={controller.Manual}>
         Manual
       </button>
-      <DisArm asset={asset} />
-      <Terminate asset={asset} />
+      <DisArm controller={controller} />
+      <Terminate controller={controller} />
     </div>
   )
 }
@@ -283,7 +283,7 @@ const dataAgeClass = (timestamp: string, old: number, warn: number, prefix: stri
   return ''
 }
 
-const FSSAssetServerStatus: React.FC<{ server: AssetServer }> = ({ server }) => {
+const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: string }> = ({ server, serverLabel }) => {
   const { data } = server
   let rttTable
   if (data?.rtt) {
@@ -396,7 +396,7 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServer }> = ({ server }) => 
   }
   return (
     <div className="asset-status-server">
-      <div className="asset-status-server-label">{server.server.name}</div>
+      <div className="asset-status-server-label">{serverLabel}</div>
       <div className="asset-status-command">{commandTxt}</div>
       {rttTable}
       {posTable}
@@ -407,7 +407,7 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServer }> = ({ server }) => 
 }
 
 interface FSSAssetStatusProps {
-  asset: Asset
+  asset: AssetState
   setSelected: (asset: string, server: string) => void
 }
 
@@ -416,58 +416,65 @@ const FSSAssetStatus: React.FC<FSSAssetStatusProps> = ({ asset, setSelected }) =
     setSelected(asset.name, e.currentTarget.name)
   }
 
+  const assetServers = Object.values(asset.servers).filter((s) => s.data)
+
   return (
     <div className="container card">
       <ul className="nav nav-tabs server-tab-btn">
-        {asset.servers
-          .filter((server) => server.data)
-          .map((server) => (
-            <li className="nav-item" key={server.server.name}>
-              <button data-toggle="tab" className="nav-link server-tab-btn" name={server.server.name} onClick={selectServer}>
-                {server.server.name}
-              </button>
-            </li>
-          ))}
+        {assetServers.map((server) => (
+          <li className="nav-item" key={server.serverName}>
+            <button data-toggle="tab" className="nav-link server-tab-btn" name={server.serverName} onClick={selectServer}>
+              {server.serverName}
+            </button>
+          </li>
+        ))}
       </ul>
-      <div className="asset-status">{asset.selectedServer && <FSSAssetServerStatus server={asset.selectedServer} />}</div>
+      <div className="asset-status">
+        {asset.selectedServerName && asset.servers[asset.selectedServerName] && (
+          <FSSAssetServerStatus server={asset.servers[asset.selectedServerName]} serverLabel={asset.selectedServerName} />
+        )}
+      </div>
     </div>
   )
 }
 
-interface FSSAssetProps {
-  asset: Asset
+interface FSSAssetContainerProps {
+  asset: AssetState
+  knownServers: Record<string, ServerState>
   setSelected: (asset: string, server: string) => void
 }
 
-function FSSAsset(props: FSSAssetProps) {
-  const { asset } = props
+function FSSAsset(props: FSSAssetContainerProps) {
+  const { asset, knownServers, setSelected } = props
+  const controller = useMemo(() => createAssetController(knownServers, asset), [knownServers, asset])
   return (
     <div className="asset">
       <div className="asset-label">{asset.name}</div>
-      <FSSAssetControls asset={asset} />
-      <FSSAssetStatus asset={asset} setSelected={props.setSelected} />
+      <FSSAssetControls controller={controller} />
+      <FSSAssetStatus asset={asset} setSelected={setSelected} />
     </div>
   )
 }
 
 interface FSSAssetSetProps {
-  knownAssets: Array<Asset>
+  knownAssets: AssetState[]
+  knownServers: Record<string, ServerState>
   setSelected: (asset: string, server: string) => void
 }
 
 function FSSAssetSet(props: FSSAssetSetProps) {
-  const { knownAssets, setSelected } = props
+  const { knownAssets, knownServers, setSelected } = props
   return (
     <div className="bar-assets">
       {knownAssets.map((asset) => (
-        <FSSAsset key={asset.name} asset={asset} setSelected={setSelected} />
+        <FSSAsset key={asset.name} asset={asset} knownServers={knownServers} setSelected={setSelected} />
       ))}
     </div>
   )
 }
 
 interface FSSServerProps {
-  server: Server
+  server: ServerState
 }
 
 function FSSServer(props: FSSServerProps) {
@@ -482,13 +489,13 @@ function FSSServer(props: FSSServerProps) {
           </tr>
         </tbody>
       </table>
-      <div className="server-login">{server.userName ? `Logged in as: ${server.userName}` : <a href={server.getURL('/login/')}>Login Here</a>}</div>
+      <div className="server-login">{server.userName ? `Logged in as: ${server.userName}` : <a href={getServerURL(server, '/login/')}>Login Here</a>}</div>
     </div>
   )
 }
 
 interface FSSServerBarProps {
-  knownServers: Array<Server>
+  knownServers: ServerState[]
 }
 
 function FSSServerBar(props: FSSServerBarProps) {
@@ -503,42 +510,50 @@ function FSSServerBar(props: FSSServerBarProps) {
 }
 
 export const FSSMainPage: React.FC = () => {
-  const [knownServers, setKnownServers] = useState<Server[]>([new Server('direct', '127.0.0.1', 0, window.location.href.slice(0, -1))])
-  const [knownAssets, setKnownAssets] = useState<Asset[]>([])
+  const [knownServers, setKnownServers] = useState<Record<string, ServerState>>({
+    direct: createServer('direct', '127.0.0.1', 0, window.location.href.slice(0, -1))
+  })
+  const [knownAssets, setKnownAssets] = useState<Record<string, AssetState>>({})
 
-  // Latest-value refs so useCallback below can always read current state without
-  // listing the state arrays as deps (which would restart the interval on every update)
+  // Latest-value refs for polling
   const knownServersRef = useRef(knownServers)
   const knownAssetsRef = useRef(knownAssets)
   knownServersRef.current = knownServers
   knownAssetsRef.current = knownAssets
 
   const updateData = useCallback(async () => {
-    let servers = knownServersRef.current
-    for (const server of [...servers]) {
-      for (const s of server.servers) {
-        if (!servers.find((srv) => srv.name === s.name)) {
-          servers = [...servers, new Server(s.name, s.address, s.client_port, s.url)]
+    const snapshotServers = knownServersRef.current
+    const serverNames = Object.keys(snapshotServers)
+
+    const results = await Promise.all(
+      serverNames.map(async (serverName) => {
+        const server = snapshotServers[serverName]
+        try {
+          const response = await fetch(getServerURL(server, '/current/all.json/'))
+          if (!response.ok) throw new Error(`HTTP ${response.status}`)
+          const data = await response.json()
+          return { serverName, data }
+        } catch (error) {
+          console.error(`Error fetching server status for ${serverName}:`, error)
+          return { serverName, data: null }
         }
+      })
+    )
+
+    let currentServers = { ...knownServersRef.current }
+    let currentAssets = { ...knownAssetsRef.current }
+
+    for (const { serverName, data } of results) {
+      if (data === null) {
+        currentServers = { ...currentServers, [serverName]: serverConnectFailed(currentServers[serverName]) }
+      } else {
+        currentServers = mergeServerPollResult(currentServers, serverName, data)
+        currentAssets = mergeServerAssets(currentAssets, serverName, data.assets)
       }
     }
 
-    let assets = knownAssetsRef.current
-    for (const server of servers) {
-      await server.updateStatus()
-      for (const assetData of server.assets) {
-        let asset = assets.find((a) => a.name === assetData.asset.name)
-        if (!asset) {
-          asset = new Asset(assetData.asset.name)
-          assets = [...assets, asset]
-        }
-        const assetServer = asset.serverAdd(server, assetData.asset.pk)
-        assetServer.updateData(assetData)
-      }
-    }
-
-    setKnownServers([...servers])
-    setKnownAssets([...assets])
+    setKnownServers(currentServers)
+    setKnownAssets(currentAssets)
   }, [])
 
   useEffect(() => {
@@ -549,16 +564,22 @@ export const FSSMainPage: React.FC = () => {
 
   const setAssetSelectedServer = (assetName: string, serverName: string) => {
     setKnownAssets((prev) => {
-      const asset = prev.find((a) => a.name === assetName)
-      asset?.setSelected(serverName)
-      return [...prev]
+      const asset = prev[assetName]
+      if (!asset) return prev
+      return {
+        ...prev,
+        [assetName]: {
+          ...asset,
+          selectedServerName: serverName
+        }
+      }
     })
   }
 
   return (
     <div>
-      <FSSServerBar knownServers={knownServers} />
-      <FSSAssetSet knownAssets={knownAssets} setSelected={setAssetSelectedServer} />
+      <FSSServerBar knownServers={Object.values(knownServers)} />
+      <FSSAssetSet knownAssets={Object.values(knownAssets)} knownServers={knownServers} setSelected={setAssetSelectedServer} />
     </div>
   )
 }
