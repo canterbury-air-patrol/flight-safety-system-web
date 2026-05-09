@@ -6,7 +6,7 @@ import 'bootstrap/dist/css/bootstrap.css'
 import L, { DragEndEvent } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import './fssweb.css'
-import React, { ReactNode, useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import React, { ReactNode, useState, useEffect, useRef, useCallback, useMemo, useContext } from 'react'
 
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
@@ -32,6 +32,20 @@ const rttTimeOld = 60 * 1000
 L.Icon.Default.prototype.options.iconUrl = markerIcon
 L.Icon.Default.prototype.options.iconRetinaUrl = markerIcon2x
 L.Icon.Default.prototype.options.shadowUrl = markerIconShadow
+
+const ErrorContext = React.createContext<(msg: string | null) => void>(() => {})
+
+const useCommand = () => {
+  const setLastError = useContext(ErrorContext)
+  return (fn: () => Promise<void> | void, onClose?: () => void) => async () => {
+    try {
+      await Promise.resolve(fn())
+      onClose?.()
+    } catch (e) {
+      setLastError(e instanceof Error ? e.message : String(e))
+    }
+  }
+}
 
 interface ModalWithButtonProps {
   label: string
@@ -72,11 +86,7 @@ interface AssetProps {
 
 const AltitudeSelect: React.FC<AssetProps> = ({ controller }) => {
   const [newAltitude, setNewAltitude] = useState(100)
-
-  const handleSet = (onClose: () => void) => {
-    controller.Altitude(newAltitude)
-    onClose()
-  }
+  const command = useCommand()
 
   return (
     <ModalWithButton
@@ -91,7 +101,7 @@ const AltitudeSelect: React.FC<AssetProps> = ({ controller }) => {
       }
       footer={(onClose) => (
         <>
-          <Button variant="light" onClick={() => handleSet(onClose)}>
+          <Button variant="light" onClick={command(() => controller.Altitude(newAltitude), onClose)}>
             Set Altitude
           </Button>
           <Button variant="primary" onClick={onClose}>
@@ -107,17 +117,13 @@ const getDefaultPosition = (): AssetPositionData => ({ timestamp: '', lat: 0, ln
 
 const Goto: React.FC<AssetProps> = ({ controller }) => {
   const [position, setPosition] = useState<AssetPositionData | undefined>(undefined)
+  const command = useCommand()
 
   const onShow = () => {
     setPosition(controller.positionMostRecent())
   }
 
-  const handleGoto = (onClose: () => void) => {
-    if (position) {
-      controller.Goto(position.lat, position.lng)
-    }
-    onClose()
-  }
+  const handleGoto = (onClose: () => void) => command(() => controller.Goto(position!.lat, position!.lng), onClose)
 
   const handlePositionChange = (event: React.ChangeEvent<HTMLInputElement>, isLat: boolean) => {
     const { value } = event.target
@@ -160,7 +166,7 @@ const Goto: React.FC<AssetProps> = ({ controller }) => {
       }
       footer={(onClose) => (
         <>
-          <Button variant="light" onClick={() => handleGoto(onClose)}>
+          <Button variant="light" onClick={handleGoto(onClose)} disabled={!position}>
             Goto
           </Button>
           <Button variant="primary" onClick={onClose}>
@@ -173,6 +179,7 @@ const Goto: React.FC<AssetProps> = ({ controller }) => {
 }
 
 const DisArm: React.FC<AssetProps> = ({ controller }) => {
+  const command = useCommand()
   return (
     <ModalWithButton
       label="DisArm"
@@ -181,13 +188,7 @@ const DisArm: React.FC<AssetProps> = ({ controller }) => {
       body={<>Warning this will probably result in the aircraft crashing. Use only when all other options are unsafe.</>}
       footer={(onClose) => (
         <>
-          <Button
-            variant="danger"
-            onClick={() => {
-              controller.DisArm()
-              onClose()
-            }}
-          >
+          <Button variant="danger" onClick={command(controller.DisArm, onClose)}>
             DisArm
           </Button>
           <Button variant="primary" onClick={onClose}>
@@ -200,6 +201,7 @@ const DisArm: React.FC<AssetProps> = ({ controller }) => {
 }
 
 const Terminate: React.FC<AssetProps> = ({ controller }) => {
+  const command = useCommand()
   return (
     <ModalWithButton
       label="Terminate"
@@ -213,31 +215,13 @@ const Terminate: React.FC<AssetProps> = ({ controller }) => {
       }
       footer={(onClose) => (
         <>
-          <Button
-            variant="danger"
-            onClick={() => {
-              controller.Terminate()
-              onClose()
-            }}
-          >
+          <Button variant="danger" onClick={command(controller.Terminate, onClose)}>
             Terminate Flight
           </Button>
-          <Button
-            variant="light"
-            onClick={() => {
-              controller.RTL()
-              onClose()
-            }}
-          >
+          <Button variant="light" onClick={command(controller.RTL, onClose)}>
             RTL
           </Button>
-          <Button
-            variant="light"
-            onClick={() => {
-              controller.Hold()
-              onClose()
-            }}
-          >
+          <Button variant="light" onClick={command(controller.Hold, onClose)}>
             Hold
           </Button>
           <Button variant="primary" onClick={onClose}>
@@ -250,20 +234,22 @@ const Terminate: React.FC<AssetProps> = ({ controller }) => {
 }
 
 const FSSAssetControls: React.FC<AssetProps> = ({ controller }) => {
+  const command = useCommand()
+
   return (
     <div className="asset-buttons btn-group" role="group">
-      <button className="btn btn-outline-secondary" onClick={controller.RTL}>
+      <button className="btn btn-outline-secondary" onClick={command(controller.RTL)}>
         RTL
       </button>
-      <button className="btn btn-outline-secondary" onClick={controller.Hold}>
+      <button className="btn btn-outline-secondary" onClick={command(controller.Hold)}>
         Hold
       </button>
       <AltitudeSelect controller={controller} />
       <Goto controller={controller} />
-      <button className="btn btn-outline-secondary" onClick={controller.Continue}>
+      <button className="btn btn-outline-secondary" onClick={command(controller.Continue)}>
         Continue
       </button>
-      <button className="btn btn-info" onClick={controller.Manual}>
+      <button className="btn btn-info" onClick={command(controller.Manual)}>
         Manual
       </button>
       <DisArm controller={controller} />
@@ -514,6 +500,7 @@ export const FSSMainPage: React.FC = () => {
     direct: createServer('direct', '127.0.0.1', 0, window.location.href.slice(0, -1))
   })
   const [knownAssets, setKnownAssets] = useState<Record<string, AssetState>>({})
+  const [lastError, setLastError] = useState<string | null>(null)
 
   // Latest-value refs for polling
   const knownServersRef = useRef(knownServers)
@@ -533,8 +520,7 @@ export const FSSMainPage: React.FC = () => {
           if (!response.ok) throw new Error(`HTTP ${response.status}`)
           const data = await response.json()
           return { serverName, data }
-        } catch (error) {
-          console.error(`Error fetching server status for ${serverName}:`, error)
+        } catch {
           return { serverName, data: null }
         }
       })
@@ -577,9 +563,17 @@ export const FSSMainPage: React.FC = () => {
   }
 
   return (
-    <div>
-      <FSSServerBar knownServers={Object.values(knownServers)} />
-      <FSSAssetSet knownAssets={Object.values(knownAssets)} knownServers={knownServers} setSelected={setAssetSelectedServer} />
-    </div>
+    <ErrorContext.Provider value={setLastError}>
+      <div>
+        {lastError && (
+          <div className="alert alert-danger alert-dismissible fade show m-3" role="alert">
+            <strong>Command Failure:</strong> {lastError}
+            <button type="button" className="btn-close" onClick={() => setLastError(null)} aria-label="Close"></button>
+          </div>
+        )}
+        <FSSServerBar knownServers={Object.values(knownServers)} />
+        <FSSAssetSet knownAssets={Object.values(knownAssets)} knownServers={knownServers} setSelected={setAssetSelectedServer} />
+      </div>
+    </ErrorContext.Provider>
   )
 }
