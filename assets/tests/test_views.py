@@ -56,3 +56,44 @@ class AssetAPITest(TestCase):
         response = self.client.post(url, {'asset_name': 'Test Drone'})
         self.assertEqual(response.status_code, 403)
         self.assertEqual(response.content.decode(), 'Asset already exists')
+
+    def test_asset_command_set_invalid_altitude(self):
+        """Test setting an invalid altitude."""
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+
+        # Above limit
+        response = self.client.post(url, {'command': 'ALT', 'altitude': 1001})
+        self.assertEqual(response.status_code, 400)
+
+        # Below limit
+        response = self.client.post(url, {'command': 'ALT', 'altitude': -1})
+        self.assertEqual(response.status_code, 400)
+
+        # Non-numeric
+        response = self.client.post(url, {'command': 'ALT', 'altitude': 'high'})
+        self.assertEqual(response.status_code, 400)
+
+    def test_asset_command_set_invalid_coordinates(self):
+        """Test setting invalid coordinates for GOTO."""
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+
+        # Invalid latitude
+        response = self.client.post(url, {
+            'command': 'GOTO',
+            'latitude': 'invalid',
+            'longitude': 172.0
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.content.decode(), 'Invalid Lat/Long')
+
+    def test_asset_command_set_missing_params(self):
+        """Test setting commands with missing required parameters."""
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+
+        # GOTO missing longitude
+        response = self.client.post(url, {'command': 'GOTO', 'latitude': -43.0})
+        self.assertEqual(response.status_code, 400)
+
+        # ALT missing altitude
+        response = self.client.post(url, {'command': 'ALT'})
+        self.assertEqual(response.status_code, 400)
