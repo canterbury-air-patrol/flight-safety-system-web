@@ -269,14 +269,11 @@ def asset_command_set(request, asset_id):
             except (ValueError, TypeError):
                 return HttpResponseBadRequest('Invalid Lat/Long')
         if command in AssetCommand.REQUIRES_ALTITUDE:
-            error = False
             try:
                 altitude = int(request.POST.get('altitude'))
+                if altitude < 0 or altitude > 1000:
+                    raise ValueError
             except (ValueError, TypeError):
-                error = True
-            if altitude < 0 or altitude > 1000:
-                error = True
-            if error:
                 return HttpResponseBadRequest('Invalid Altitude')
         asset_command = AssetCommand(asset=asset, command=command,
                                      position=point, altitude=altitude)
