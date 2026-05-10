@@ -140,3 +140,17 @@ class AssetAPITest(TestCase):
         rtt_data = data['rtt']
         self.assertEqual(rtt_data['rtt_max'], total_samples)
         self.assertEqual(rtt_data['rtt_min'], total_samples - RTT_SAMPLE_LIMIT + 1)
+
+    def test_asset_add_get_rejected(self):
+        """Test that GET request to asset_add is rejected."""
+        url = reverse('asset_add')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.content.decode(), 'Only POST is supported')
+
+    def test_asset_command_set_get_rejected(self):
+        """Test that GET request to asset_command_set is rejected."""
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.content.decode(), 'Only POST is supported')
