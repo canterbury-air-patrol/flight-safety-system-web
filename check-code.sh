@@ -18,5 +18,7 @@ pycodestyle --ignore=E501 */*.py
 
 pylint ${PATHS}
 
+./manage.py test
+
 deactivate
 
