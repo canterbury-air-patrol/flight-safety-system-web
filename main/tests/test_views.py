@@ -6,7 +6,7 @@ from django.contrib.gis.geos import Point
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from assets.models import Asset, AssetPosition, AssetRTT, AssetStatus
+from assets.models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetStatus
 from config.models import ServerConfig
 
 
@@ -55,6 +55,18 @@ class StatusAPITest(TestCase):
         self.assertEqual(asset_data['position']['alt'], 100)
         self.assertEqual(asset_data['status']['battery_percent'], 85)
         self.assertEqual(asset_data['rtt']['rtt'], 50)
+
+    def test_all_status_data_with_altitude_zero(self):
+        """Test that altitude 0 is correctly included in command data (Regression for DJANGO-01)."""
+        AssetCommand.objects.create(asset=self.asset, command='ALT', altitude=0)
+
+        url = reverse('all_status_data')
+        response = self.client.get(url)
+        data = response.json()
+
+        cmd_data = data['assets'][0]['command']
+        self.assertEqual(cmd_data['command'], 'Adjust Altitude')
+        self.assertEqual(cmd_data['alt'], 0)
 
     def test_current_user_unauthenticated(self):
         """Test current_user when not logged in."""
