@@ -97,3 +97,17 @@ class AssetAPITest(TestCase):
         # ALT missing altitude
         response = self.client.post(url, {'command': 'ALT'})
         self.assertEqual(response.status_code, 400)
+
+    def test_asset_status_json_success(self):
+        """Test asset_status_json for a valid asset."""
+        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(data['asset']['name'], 'Test Drone')
+
+    def test_asset_status_json_not_found(self):
+        """Test asset_status_json for a non-existent asset."""
+        url = reverse('asset_status_json', kwargs={'asset_id': 99999})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 404)
