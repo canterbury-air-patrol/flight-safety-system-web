@@ -24,13 +24,19 @@ class ConfigViewTest(TestCase):
         url = reverse('config_main')
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, 'config/main.html')
+        self.assertTemplateUsed(response, 'main/main.html')
 
-        # Verify context data
-        self.assertIn(self.asset, response.context['Assets'])
-        self.assertIn(self.fss_server, response.context['FSSservers'])
-        self.assertIn(self.smm_server, response.context['SMMservers'])
+    def test_config_data_json(self):
+        """Test the configuration data JSON endpoint."""
+        url = reverse('config_data_json')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
 
-        # Verify asset config attachment
-        asset_in_context = next(a for a in response.context['Assets'] if a.id == self.asset.id)
-        self.assertEqual(asset_in_context.config, self.asset_config)
+        self.assertEqual(len(data['fss_servers']), 1)
+        self.assertEqual(data['fss_servers'][0]['name'], 'FSS Server')
+        self.assertEqual(len(data['smm_servers']), 1)
+        self.assertEqual(data['smm_servers'][0]['name'], 'SMM Server')
+        self.assertEqual(len(data['assets']), 1)
+        self.assertEqual(data['assets'][0]['name'], 'Test Drone')
+        self.assertEqual(data['assets'][0]['smm_name'], 'SMM Server')

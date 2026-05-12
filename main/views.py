@@ -62,6 +62,7 @@ def current_user(request):
     return JsonResponse({'currentUser': user})
 
 
+@ensure_csrf_cookie
 def login_page(request):
     """
     Login a user
@@ -74,7 +75,7 @@ def login_page(request):
             login(request, user)
             # Redirect to a success page.
             return redirect('/')
-    return render(request, 'main/login_page.html')
+    return render(request, 'main/main.html')
 
 
 def all_status_data(request):
