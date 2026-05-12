@@ -1,7 +1,6 @@
 {
     "entry": [
-        "frontend/main.tsx",
-        "frontend/pretty.tsx"
+        "frontend/main.tsx"
     ],
     "bundle": true,
     "minify": true,
