@@ -9,21 +9,19 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import OuterRef, Subquery
 from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
 from django.shortcuts import get_object_or_404, render
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 
 from .models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
 
 RTT_SAMPLE_LIMIT = 15
 
 
+@ensure_csrf_cookie
 def assets_main(request):
     """
-    Show the current asset list
+    Show the current asset list (serves React SPA)
     """
-    data = {
-        'assets': Asset.objects.all(),
-    }
-    return render(request, 'assets/main.html', data)
+    return render(request, 'main/main.html')
 
 
 def _format_position(pos):

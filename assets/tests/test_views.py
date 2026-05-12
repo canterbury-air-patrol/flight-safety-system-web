@@ -154,3 +154,10 @@ class AssetAPITest(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.content.decode(), 'Only POST is supported')
+
+    def test_assets_main(self):
+        """Test assets_main view serves React SPA."""
+        url = reverse('assets_main')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'main/main.html')
