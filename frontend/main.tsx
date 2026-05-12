@@ -7,6 +7,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
 import { FSSMainPage } from './fss-main-page'
 import { LoginPage } from './login-page'
 import { ConfigPage } from './config-page'
+import { AssetListPage } from './asset-list-page'
 
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement)
 root.render(
@@ -17,6 +18,8 @@ root.render(
       <Route path="/login/" element={<LoginPage />} />
       <Route path="/config" element={<ConfigPage />} />
       <Route path="/config/" element={<ConfigPage />} />
+      <Route path="/assets" element={<AssetListPage />} />
+      <Route path="/assets/" element={<AssetListPage />} />
     </Routes>
   </Router>
 )
