@@ -18,7 +18,7 @@ pycodestyle --ignore=E501 */*.py
 
 pylint ${PATHS}
 
-./manage.py test
+./manage.py test --settings=fss.test_settings
 
 deactivate
 
