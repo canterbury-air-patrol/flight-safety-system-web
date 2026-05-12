@@ -88,7 +88,7 @@ class StatusAPITest(TestCase):
         url = reverse('login_page')
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self.assertTemplateUsed(response, 'main/login_page.html')
+        self.assertTemplateUsed(response, 'main/main.html')
 
     def test_login_page_post_success(self):
         """Test successful login via POST."""
