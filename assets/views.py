@@ -172,6 +172,7 @@ def bulk_asset_status_data(assets):
     """
     Get current status data for a list of assets efficiently.
     """
+
     def latest_subquery(model):
         return (
             model.objects
@@ -218,12 +219,17 @@ def bulk_asset_status_data(assets):
         },
     }
 
-    # Fetch RTTs (up to RTT_SAMPLE_LIMIT per asset) in 1 bulk query
+    # Fetch RTTs (up to RTT_SAMPLE_LIMIT per asset)
+    # We do this per-asset because a bulk query with a limit-per-group is extremely
+    # inefficient in Django's ORM without complex raw SQL or lateral joins.
+    # Given the number of assets is small, N fast indexed queries is better
+    # than 1 query that fetches every RTT record in the database.
     rtts_by_asset = {}
-    for rtt in AssetRTT.objects.filter(asset__in=assets).order_by('asset', '-timestamp'):
-        rtts = rtts_by_asset.setdefault(rtt.asset_id, [])
-        if len(rtts) < RTT_SAMPLE_LIMIT:
-            rtts.append(rtt)
+    for asset in annotated_assets:
+        rtts_by_asset[asset.pk] = list(
+            AssetRTT.objects.filter(asset=asset)
+            .order_by('-timestamp')[:RTT_SAMPLE_LIMIT]
+        )
 
     results = []
     for asset in annotated_assets:
