@@ -1,6 +1,6 @@
 import { degreesToDM, DMToDegrees } from '@canterbury-air-patrol/deg-converter'
 import { AssetState, AssetServerState, AssetController, createAssetController, mergeServerAssets } from './asset'
-import { ServerState, createServer, getServerURL, serverConnectFailed, AssetPositionData, mergeServerPollResult } from './server'
+import { ServerState, createServer, getServerURL, serverConnectFailed, serverUnauthenticated, AssetPositionData, mergeServerPollResult } from './server'
 import 'bootstrap'
 import 'bootstrap/dist/css/bootstrap.css'
 import L, { DragEndEvent } from 'leaflet'
@@ -517,11 +517,12 @@ export const FSSMainPage: React.FC = () => {
         const server = snapshotServers[serverName]
         try {
           const response = await fetch(getServerURL(server, '/current/all.json/'), { credentials: 'include' })
+          if (response.status === 403) return { serverName, data: null, unauthenticated: true }
           if (!response.ok) throw new Error(`HTTP ${response.status}`)
           const data = await response.json()
-          return { serverName, data }
+          return { serverName, data, unauthenticated: false }
         } catch {
-          return { serverName, data: null }
+          return { serverName, data: null, unauthenticated: false }
         }
       })
     )
@@ -529,9 +530,13 @@ export const FSSMainPage: React.FC = () => {
     let currentServers = { ...knownServersRef.current }
     let currentAssets = { ...knownAssetsRef.current }
 
-    for (const { serverName, data } of results) {
+    for (const { serverName, data, unauthenticated } of results) {
       if (data === null) {
-        currentServers = { ...currentServers, [serverName]: serverConnectFailed(currentServers[serverName]) }
+        if (unauthenticated) {
+          currentServers = { ...currentServers, [serverName]: serverUnauthenticated(currentServers[serverName]) }
+        } else {
+          currentServers = { ...currentServers, [serverName]: serverConnectFailed(currentServers[serverName]) }
+        }
       } else {
         currentServers = mergeServerPollResult(currentServers, serverName, data)
         currentAssets = mergeServerAssets(currentAssets, serverName, data.assets)

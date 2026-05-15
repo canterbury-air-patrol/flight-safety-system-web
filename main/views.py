@@ -10,6 +10,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from assets.models import Asset
 from assets.views import bulk_asset_status_data
 from config.models import ServerConfig
+from fss.decorators import login_required_api
 
 
 @ensure_csrf_cookie
@@ -72,6 +73,7 @@ def login_page(request):
     return render(request, 'main/main.html')
 
 
+@login_required_api
 def all_status_data(request):
     """
     Return all data in one go

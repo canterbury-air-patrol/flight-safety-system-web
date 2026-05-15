@@ -1,6 +1,7 @@
 """
 Tests for the Asset API
 """
+from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -15,20 +16,34 @@ class AssetAPITest(TestCase):
     def setUp(self):
         self.client = Client()
         self.asset = Asset.objects.create(name='Test Drone')
+        self.user = get_user_model().objects.create_user(username='testuser', password='testpass')
+
+    def test_asset_command_set_unauthenticated(self):
+        """Test that unauthenticated command attempts are rejected."""
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        response = self.client.post(url, {'command': 'RTL'})
+        self.assertEqual(response.status_code, 403)
+
+    def test_asset_add_unauthenticated(self):
+        """Test that unauthenticated asset-add attempts are rejected."""
+        url = reverse('asset_add')
+        response = self.client.post(url, {'asset_name': 'New Drone'})
+        self.assertEqual(response.status_code, 403)
 
     def test_asset_command_set_rtl(self):
         """Test setting RTL command."""
+        self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
         response = self.client.post(url, {'command': 'RTL'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content.decode(), 'Created')
 
-        # Verify command was created
         cmd = AssetCommand.objects.filter(asset=self.asset).latest('timestamp')
         self.assertEqual(cmd.command, 'RTL')
 
     def test_asset_command_set_goto(self):
         """Test setting GOTO command with coordinates."""
+        self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
         response = self.client.post(url, {
             'command': 'GOTO',
@@ -44,15 +59,16 @@ class AssetAPITest(TestCase):
 
     def test_asset_add(self):
         """Test adding a new asset."""
+        self.client.force_login(self.user)
         url = reverse('asset_add')
         response = self.client.post(url, {'asset_name': 'New Drone'})
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content.decode(), 'Created')
-
         self.assertTrue(Asset.objects.filter(name='New Drone').exists())
 
     def test_asset_add_duplicate(self):
         """Test adding a duplicate asset."""
+        self.client.force_login(self.user)
         url = reverse('asset_add')
         response = self.client.post(url, {'asset_name': 'Test Drone'})
         self.assertEqual(response.status_code, 409)
@@ -60,25 +76,23 @@ class AssetAPITest(TestCase):
 
     def test_asset_command_set_invalid_altitude(self):
         """Test setting an invalid altitude."""
+        self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
 
-        # Above limit
         response = self.client.post(url, {'command': 'ALT', 'altitude': 1001})
         self.assertEqual(response.status_code, 400)
 
-        # Below limit
         response = self.client.post(url, {'command': 'ALT', 'altitude': -1})
         self.assertEqual(response.status_code, 400)
 
-        # Non-numeric
         response = self.client.post(url, {'command': 'ALT', 'altitude': 'high'})
         self.assertEqual(response.status_code, 400)
 
     def test_asset_command_set_invalid_coordinates(self):
         """Test setting invalid coordinates for GOTO."""
+        self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
 
-        # Invalid latitude
         response = self.client.post(url, {
             'command': 'GOTO',
             'latitude': 'invalid',
@@ -89,13 +103,12 @@ class AssetAPITest(TestCase):
 
     def test_asset_command_set_missing_params(self):
         """Test setting commands with missing required parameters."""
+        self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
 
-        # GOTO missing longitude
         response = self.client.post(url, {'command': 'GOTO', 'latitude': -43.0})
         self.assertEqual(response.status_code, 400)
 
-        # ALT missing altitude
         response = self.client.post(url, {'command': 'ALT'})
         self.assertEqual(response.status_code, 400)
 
@@ -127,7 +140,6 @@ class AssetAPITest(TestCase):
 
     def test_rtt_sample_limit(self):
         """Test that RTT calculation only uses the latest RTT_SAMPLE_LIMIT samples."""
-        # Create RTTs with values 1 to 20
         total_samples = RTT_SAMPLE_LIMIT + 5
         for i in range(1, total_samples + 1):
             AssetRTT.objects.create(asset=self.asset, rtt=i)
@@ -136,20 +148,21 @@ class AssetAPITest(TestCase):
         response = self.client.get(url)
         data = response.json()
 
-        # The latest samples should be (total_samples - RTT_SAMPLE_LIMIT + 1) to total_samples
         rtt_data = data['rtt']
         self.assertEqual(rtt_data['rtt_max'], total_samples)
         self.assertEqual(rtt_data['rtt_min'], total_samples - RTT_SAMPLE_LIMIT + 1)
 
     def test_asset_add_get_rejected(self):
-        """Test that GET request to asset_add is rejected."""
+        """Test that authenticated GET request to asset_add is rejected."""
+        self.client.force_login(self.user)
         url = reverse('asset_add')
         response = self.client.get(url)
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.content.decode(), 'Only POST is supported')
 
     def test_asset_command_set_get_rejected(self):
-        """Test that GET request to asset_command_set is rejected."""
+        """Test that authenticated GET request to asset_command_set is rejected."""
+        self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 400)

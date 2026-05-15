@@ -11,6 +11,8 @@ from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
+from fss.decorators import login_required_api
+
 from .models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
 
 RTT_SAMPLE_LIMIT = 15
@@ -255,6 +257,7 @@ def asset_status_json(request, asset_id):
     return JsonResponse(asset_status_data(asset))
 
 
+@login_required_api
 def asset_command_set(request, asset_id):
     """
     Set the command for a given asset
@@ -285,6 +288,7 @@ def asset_command_set(request, asset_id):
     return HttpResponseBadRequest("Only POST is supported")
 
 
+@login_required_api
 def asset_add(request):
     """
     Add an asset
