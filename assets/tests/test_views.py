@@ -135,6 +135,16 @@ class AssetAPITest(TestCase):
         data = response.json()
         self.assertEqual(data['asset']['name'], 'Test Drone')
 
+    def test_asset_status_json_command_code(self):
+        """Test that asset_status_json includes command_code alongside the display string."""
+        self.client.force_login(self.user)
+        AssetCommand.objects.create(asset=self.asset, command='RTL')
+        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
+        response = self.client.get(url)
+        data = response.json()
+        self.assertEqual(data['command']['command_code'], 'RTL')
+        self.assertEqual(data['command']['command'], 'Return to Launch')
+
     def test_asset_status_json_not_found(self):
         """Test asset_status_json for a non-existent asset."""
         self.client.force_login(self.user)

@@ -30,6 +30,7 @@ export interface AssetRTTData {
 export interface AssetCommandData {
   timestamp: string
   command: string
+  command_code: string
   lat?: number
   lng?: number
   alt?: number

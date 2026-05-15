@@ -91,6 +91,7 @@ def _format_command(cmd):
     data = {
         'timestamp': cmd.timestamp,
         'command': cmd.get_command_display(),
+        'command_code': cmd.command,
     }
     if cmd.position:
         data['lat'] = cmd.position.y
