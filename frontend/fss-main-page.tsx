@@ -497,7 +497,7 @@ function FSSServerBar(props: FSSServerBarProps) {
 
 export const FSSMainPage: React.FC = () => {
   const [knownServers, setKnownServers] = useState<Record<string, ServerState>>({
-    direct: createServer('direct', '127.0.0.1', 0, window.location.href.slice(0, -1))
+    direct: createServer('direct', '127.0.0.1', 0, window.location.origin)
   })
   const [knownAssets, setKnownAssets] = useState<Record<string, AssetState>>({})
   const [lastError, setLastError] = useState<string | null>(null)
