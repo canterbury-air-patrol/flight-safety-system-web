@@ -104,6 +104,16 @@ export const serverConnectFailed = (server: ServerState): ServerState => ({
   userName: undefined
 })
 
+export const serverUnauthenticated = (server: ServerState): ServerState => ({
+  ...server,
+  connected: true,
+  status: 'Login required',
+  userName: undefined,
+  csrfToken: undefined,
+  assets: [],
+  servers: []
+})
+
 export const mergeServerPollResult = (currentServers: Record<string, ServerState>, serverName: string, data: StatusData): Record<string, ServerState> => {
   const nextServers = { ...currentServers, [serverName]: updateServerData(currentServers[serverName], data) }
   for (const s of data.servers) {

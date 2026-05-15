@@ -1,4 +1,4 @@
-"""E2E tests for the server-list JSON endpoint (/current/all.json/).
+"""E2E tests for the status JSON endpoint (/current/all.json/).
 
 Regression for TEST-02: config_serverconfig was missing the name, config_port,
 and https columns in the e2e schema, so any test that exercised the Django
@@ -7,12 +7,17 @@ server-list response would get incomplete or wrong data.
 Run with: python manage.py test e2e
 Requires: PostgreSQL + PostGIS (same as the dev environment).
 """
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
 from config.models import ServerConfig
 
 
 class ServerListJsonTest(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(username='testuser', password='testpass')
+        self.client.force_login(self.user)
+
     def test_returns_name_and_http_url(self):
         ServerConfig.objects.create(
             name="primary",
