@@ -2,7 +2,7 @@
 Main view functions
 """
 from django.contrib.auth import authenticate, login
-from django.http import HttpResponse, JsonResponse
+from django.http import JsonResponse
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
@@ -17,14 +17,6 @@ def main_view(request):
     The default landing page
     """
     return render(request, 'main/main.html')
-
-
-def status_view(request):
-    """
-    Report the current status
-    """
-    assets = Asset.objects.all()
-    return HttpResponse(f'<tr><td class="server-status-label">Known Assets</td><td class="server-status-value">{assets.count()}</td></tr>')
 
 
 def server_list(request):
