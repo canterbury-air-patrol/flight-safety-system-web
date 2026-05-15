@@ -21,6 +21,7 @@ def main_view(request):
     return render(request, 'main/main.html')
 
 
+@login_required_api
 def server_list(request):
     """
     Return the active servers as a json array
@@ -39,6 +40,7 @@ def server_list(request):
     return JsonResponse({'servers': servers_list})
 
 
+@login_required_api
 def asset_list(request):
     """
     Return the know assets as a json array
