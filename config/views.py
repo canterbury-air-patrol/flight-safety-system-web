@@ -6,6 +6,7 @@ from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from assets.models import Asset
+from fss.decorators import login_required_api
 
 from .models import AssetConfig, ServerConfig, SMMConfig
 
@@ -18,6 +19,7 @@ def config_main(request):
     return render(request, 'main/main.html')
 
 
+@login_required_api
 def config_data_json(request):
     """
     Return all configuration data as JSON

@@ -248,6 +248,7 @@ def bulk_asset_status_data(assets):
     return results
 
 
+@login_required_api
 def asset_status_json(request, asset_id):
     """
     Show the current asset status

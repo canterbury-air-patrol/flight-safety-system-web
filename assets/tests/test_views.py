@@ -112,8 +112,15 @@ class AssetAPITest(TestCase):
         response = self.client.post(url, {'command': 'ALT'})
         self.assertEqual(response.status_code, 400)
 
+    def test_asset_status_json_unauthenticated(self):
+        """Test asset_status_json rejects unauthenticated requests."""
+        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
     def test_asset_status_json_success(self):
         """Test asset_status_json for a valid asset."""
+        self.client.force_login(self.user)
         url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
@@ -122,12 +129,14 @@ class AssetAPITest(TestCase):
 
     def test_asset_status_json_not_found(self):
         """Test asset_status_json for a non-existent asset."""
+        self.client.force_login(self.user)
         url = reverse('asset_status_json', kwargs={'asset_id': 99999})
         response = self.client.get(url)
         self.assertEqual(response.status_code, 404)
 
     def test_asset_status_no_data(self):
         """Test an asset with no status/position/rtt data."""
+        self.client.force_login(self.user)
         asset = Asset.objects.create(name='Empty Drone')
         url = reverse('asset_status_json', kwargs={'asset_id': asset.pk})
         response = self.client.get(url)
@@ -140,6 +149,7 @@ class AssetAPITest(TestCase):
 
     def test_rtt_sample_limit(self):
         """Test that RTT calculation only uses the latest RTT_SAMPLE_LIMIT samples."""
+        self.client.force_login(self.user)
         total_samples = RTT_SAMPLE_LIMIT + 5
         for i in range(1, total_samples + 1):
             AssetRTT.objects.create(asset=self.asset, rtt=i)

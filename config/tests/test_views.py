@@ -1,6 +1,7 @@
 """
 Tests for the Config API
 """
+from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 
@@ -14,6 +15,7 @@ class ConfigViewTest(TestCase):
     """
     def setUp(self):
         self.client = Client()
+        self.user = get_user_model().objects.create_user(username='testuser', password='testpass')
         self.asset = Asset.objects.create(name='Test Drone')
         self.smm_server = SMMConfig.objects.create(name='SMM Server', address='2.2.2.2', port=9090)
         self.asset_config = AssetConfig.objects.create(asset=self.asset, smm=self.smm_server, smm_login='user', smm_password='pass')
@@ -26,8 +28,15 @@ class ConfigViewTest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'main/main.html')
 
+    def test_config_data_json_unauthenticated(self):
+        """Test config_data_json rejects unauthenticated requests."""
+        url = reverse('config_data_json')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
     def test_config_data_json(self):
         """Test the configuration data JSON endpoint."""
+        self.client.force_login(self.user)
         url = reverse('config_data_json')
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)

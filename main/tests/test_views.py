@@ -84,6 +84,38 @@ class StatusAPITest(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['currentUser'], 'testuser')
 
+    def test_server_list_unauthenticated(self):
+        """Test server_list rejects unauthenticated requests."""
+        url = reverse('server_list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_server_list_authenticated(self):
+        """Test server_list returns data when logged in."""
+        self.client.login(username='testuser', password='password')
+        url = reverse('server_list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data['servers']), 1)
+        self.assertEqual(data['servers'][0]['name'], 'Test Server')
+
+    def test_asset_list_unauthenticated(self):
+        """Test asset_list rejects unauthenticated requests."""
+        url = reverse('asset_list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 403)
+
+    def test_asset_list_authenticated(self):
+        """Test asset_list returns data when logged in."""
+        self.client.login(username='testuser', password='password')
+        url = reverse('asset_list')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertEqual(len(data['assets']), 1)
+        self.assertEqual(data['assets'][0]['name'], 'Test Drone')
+
     def test_login_page_get(self):
         """Test login page GET request."""
         url = reverse('login_page')
