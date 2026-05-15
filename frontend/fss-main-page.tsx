@@ -368,15 +368,15 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: st
   let commandTxt: ReactNode = ''
   if (data?.command) {
     commandTxt = data.command.command
-    if (data.command.command === 'Goto Position') {
+    if (data.command.command_code === 'GOTO') {
       if (data.command.lat && data.command.lng) {
         commandTxt += ` ${degreesToDM(data.command.lat, true)}, ${degreesToDM(data.command.lng, false)}`
       }
     }
-    if (data.command.command === 'Adjust Altitude') {
+    if (data.command.command_code === 'ALT') {
       commandTxt += ` to ${data.command.alt}ft`
     }
-    if (data.command.command === 'Manual') {
+    if (data.command.command_code === 'MAN') {
       commandTxt = <strong>Take Manual Control Now</strong>
     }
   }
