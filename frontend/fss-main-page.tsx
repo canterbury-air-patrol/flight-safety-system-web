@@ -508,7 +508,13 @@ export const FSSMainPage: React.FC = () => {
   knownServersRef.current = knownServers
   knownAssetsRef.current = knownAssets
 
+  const pollAbortRef = useRef<AbortController | null>(null)
+
   const updateData = useCallback(async () => {
+    pollAbortRef.current?.abort()
+    const ac = new AbortController()
+    pollAbortRef.current = ac
+
     const snapshotServers = knownServersRef.current
     const serverNames = Object.keys(snapshotServers)
 
@@ -516,7 +522,7 @@ export const FSSMainPage: React.FC = () => {
       serverNames.map(async (serverName) => {
         const server = snapshotServers[serverName]
         try {
-          const response = await fetch(getServerURL(server, '/current/all.json/'), { credentials: 'include' })
+          const response = await fetch(getServerURL(server, '/current/all.json/'), { credentials: 'include', signal: ac.signal })
           if (response.status === 403) return { serverName, data: null, unauthenticated: true }
           if (!response.ok) throw new Error(`HTTP ${response.status}`)
           const data = await response.json()
@@ -526,6 +532,8 @@ export const FSSMainPage: React.FC = () => {
         }
       })
     )
+
+    if (ac.signal.aborted) return
 
     let currentServers = { ...knownServersRef.current }
     let currentAssets = { ...knownAssetsRef.current }
@@ -550,7 +558,10 @@ export const FSSMainPage: React.FC = () => {
   useEffect(() => {
     updateData()
     const timer = setInterval(() => updateData(), 3000)
-    return () => clearInterval(timer)
+    return () => {
+      clearInterval(timer)
+      pollAbortRef.current?.abort()
+    }
   }, [updateData])
 
   const setAssetSelectedServer = (assetName: string, serverName: string) => {
