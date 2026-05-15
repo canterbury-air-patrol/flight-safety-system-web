@@ -101,4 +101,6 @@ def all_status_data(request):
     assets = Asset.objects.all()
     data['assets'] = bulk_asset_status_data(assets)
 
-    return JsonResponse(data)
+    response = JsonResponse(data)
+    response['Cache-Control'] = 'private, no-store'
+    return response

@@ -23,20 +23,25 @@ cd flight-safety-system-web
 
 ### HTTPS is mandatory
 
-All FSS web instances **must** be served over HTTPS. The authentication and
-CSRF security model depends on browser same-site cookie semantics: session and
-CSRF cookies are sent cross-origin only when both the sending and receiving
-origin are the same registered domain **and** the connection uses HTTPS.
-Serving any instance over plain HTTP breaks cross-server authentication and
-opens the session to eavesdropping on a safety-critical system.
+All FSS web instances **must** be served over HTTPS. Session and CSRF cookies
+are marked `Secure` in production (`SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`),
+so they will not be transmitted over plain HTTP at all. Serving any instance
+over HTTP means operators cannot log in and no commands can be sent.
 
 ### Multi-server deployments must share a registered domain
 
 When running more than one FSS web instance (for redundancy), every instance
-must be on the same registered domain — for example `fss1.example.com` and
-`fss2.example.com`. Servers on different domains or bare IP addresses cannot
-exchange credentials cross-origin and will not be able to send authenticated
-commands to one another's assets.
+must share the same *registered domain* (eTLD+1) — for example
+`fss1.example.com` and `fss2.example.com` both have the registered domain
+`example.com`. Browsers treat these as *same-site*, which means `SameSite=Lax`
+session and CSRF cookies set by `fss2.example.com` are included in credentialed
+`fetch()` requests issued from a page at `fss1.example.com`. This is what
+allows a single browser tab to authenticate against multiple servers.
+
+Servers on different registered domains (e.g. `fss.alpha.com` and
+`fss.beta.com`) or bare IP addresses are *cross-site* and their cookies will
+not be sent cross-origin under `SameSite=Lax`. Such deployments are not
+supported.
 
 ### Configure CORS_ALLOWED_ORIGINS on each instance
 
