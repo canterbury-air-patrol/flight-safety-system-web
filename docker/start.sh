@@ -1,18 +1,22 @@
 #!/bin/bash
+set -e
 
 cp docker/local_settings.py fss/local_settings.py
-./setup-db.sh
-
 source venv/bin/activate
+
 ./manage.py migrate
 
-if [ "$1" == "test" ]
+if [ ! -z "$DJANGO_SUPERUSER_USERNAME" ] && [ ! -z "$DJANGO_SUPERUSER_PASSWORD" ]
 then
-./manage.py test
-else
-    if [ ! -z "$DJANGO_SUPERUSER_USERNAME" ] && [ ! -z "$DJANGO_SUPERUSER_PASSWORD" ]
-    then
-        ./manage.py createsuperuser --noinput
-    fi
-    ./manage.py runserver 0.0.0.0:8080
+    ./manage.py createsuperuser --noinput || true
 fi
+
+./manage.py collectstatic --noinput
+
+exec uwsgi \
+    --http 0.0.0.0:8080 \
+    --module fss.wsgi \
+    --master \
+    --workers 4 \
+    --threads 2 \
+    --static-map /static/=/code/static/
