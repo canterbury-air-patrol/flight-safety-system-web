@@ -14,6 +14,12 @@ TIME_ZONE = 'UTC'
 ALLOWED_HOSTS = ['*']
 CSRF_TRUSTED_ORIGINS = ['http://localhost:8080']
 
+# CORS: list every peer FSS web-server origin so browsers can send credentials
+# cross-origin. Each server must appear in the other servers' lists.
+# All entries must use HTTPS and share a registered domain (e.g. example.com).
+# Example: CORS_ALLOWED_ORIGINS = ['https://fss1.example.com', 'https://fss2.example.com']
+CORS_ALLOWED_ORIGINS = []
+
 # Database
 # https://docs.djangoproject.com/en/2.1/ref/settings/#databases
 

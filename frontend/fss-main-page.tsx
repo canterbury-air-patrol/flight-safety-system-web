@@ -516,7 +516,7 @@ export const FSSMainPage: React.FC = () => {
       serverNames.map(async (serverName) => {
         const server = snapshotServers[serverName]
         try {
-          const response = await fetch(getServerURL(server, '/current/all.json/'))
+          const response = await fetch(getServerURL(server, '/current/all.json/'), { credentials: 'include' })
           if (!response.ok) throw new Error(`HTTP ${response.status}`)
           const data = await response.json()
           return { serverName, data }

@@ -115,3 +115,9 @@ STATICFILES_DIRS = [
 ]
 
 DEFAULT_AUTO_FIELD = 'django.db.models.AutoField'
+
+# CORS: restrict to the two endpoints that remote FSS servers need to access.
+# CORS_ALLOWED_ORIGINS must be set per deployment in local_settings.py.
+# All peer servers must share a registered domain and be served over HTTPS.
+CORS_URLS_REGEX = r'^/(current/all\.json|assets/\d+/command/set)/$'
+CORS_ALLOW_CREDENTIALS = True
