@@ -63,11 +63,11 @@ def _format_rtts(rtts):
     if not rtts:
         return None
 
-    # Initialize aggregates from the first RTT entry to avoid magic sentinel values
-    first = rtts[0]
-    rtt_total = first.rtt
-    rtt_min = first.rtt
-    rtt_max = first.rtt
+    # Initialize aggregates from the most recent RTT entry to avoid magic sentinel values
+    latest = rtts[0]
+    rtt_total = latest.rtt
+    rtt_min = latest.rtt
+    rtt_max = latest.rtt
 
     for rtt in rtts[1:]:
         rtt_min = min(rtt_min, rtt.rtt)
@@ -77,8 +77,8 @@ def _format_rtts(rtts):
     rtt_avg = rtt_total / len(rtts)
 
     return {
-        'timestamp': first.timestamp,
-        'rtt': first.rtt,
+        'timestamp': latest.timestamp,
+        'rtt': latest.rtt,
         'rtt_min': rtt_min,
         'rtt_max': rtt_max,
         'rtt_avg': round(rtt_avg),
