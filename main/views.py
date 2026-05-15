@@ -67,6 +67,7 @@ def login_page(request):
             login(request, user)
             # Redirect to a success page.
             return redirect('/')
+        return redirect('/login/?error=1')
     return render(request, 'main/main.html')
 
 
