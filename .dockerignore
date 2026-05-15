@@ -1,0 +1,9 @@
+venv/
+node_modules/
+.git/
+fss/local_settings.py
+fss/secretkey.txt
+*.pyc
+__pycache__/
+.vscode/
+todo/
