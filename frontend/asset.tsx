@@ -35,7 +35,11 @@ export const sendAssetCommand = async (knownServers: Record<string, ServerState>
       if (!server) return Promise.resolve()
       return fetch(getAssetServerURL(server, assetServer, 'command/set/'), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          'X-CSRFToken': server.csrfToken ?? ''
+        },
         body: new URLSearchParams(entries)
       }).then((r) => {
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)

@@ -9,7 +9,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import OuterRef, Subquery
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render
-from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
+from django.views.decorators.csrf import ensure_csrf_cookie
 
 from .models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
 
@@ -255,7 +255,6 @@ def asset_status_json(request, asset_id):
     return JsonResponse(asset_status_data(asset))
 
 
-@csrf_exempt
 def asset_command_set(request, asset_id):
     """
     Set the command for a given asset

@@ -56,6 +56,7 @@ export interface ServerDetails {
 
 export interface StatusData {
   currentUser?: string
+  csrfToken: string
   servers: Array<ServerDetails>
   assets: Array<AssetStatus>
 }
@@ -67,6 +68,7 @@ export interface ServerState {
   url: string
   connected: boolean
   userName?: string
+  csrfToken?: string
   status: string
   assets: Array<AssetStatus>
   servers: Array<ServerDetails>
@@ -90,6 +92,7 @@ export const updateServerData = (server: ServerState, data: StatusData): ServerS
   connected: true,
   status: `Known Assets: ${data.assets.length}`,
   userName: data.currentUser,
+  csrfToken: data.csrfToken,
   assets: data.assets,
   servers: data.servers
 })

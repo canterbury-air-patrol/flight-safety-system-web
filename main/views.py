@@ -3,6 +3,7 @@ Main view functions
 """
 from django.contrib.auth import authenticate, login
 from django.http import JsonResponse
+from django.middleware.csrf import get_token
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
@@ -77,6 +78,7 @@ def all_status_data(request):
     """
     data = {
         'currentUser': None,
+        'csrfToken': get_token(request),
         'servers': [],
         'assets': []
     }
