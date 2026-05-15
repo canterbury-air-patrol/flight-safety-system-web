@@ -55,7 +55,7 @@ class AssetAPITest(TestCase):
         """Test adding a duplicate asset."""
         url = reverse('asset_add')
         response = self.client.post(url, {'asset_name': 'Test Drone'})
-        self.assertEqual(response.status_code, 403)
+        self.assertEqual(response.status_code, 409)
         self.assertEqual(response.content.decode(), 'Asset already exists')
 
     def test_asset_command_set_invalid_altitude(self):
