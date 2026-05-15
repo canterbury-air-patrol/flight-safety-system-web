@@ -41,7 +41,7 @@ def asset_list(request):
     """
     Return the know assets as a json array
     """
-    assets = Asset.objects.filter()
+    assets = Asset.objects.all()
     assets_list = [{'pk': asset.pk, 'name': asset.name} for asset in assets]
     return JsonResponse({'assets': assets_list})
 
