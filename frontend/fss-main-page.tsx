@@ -95,7 +95,7 @@ const AltitudeSelect: React.FC<AssetProps> = ({ controller }) => {
       title="Set Target Altitude:"
       body={
         <>
-          New Altitude: <input type="text" size={3} maxLength={3} min="0" max="999" onChange={(e) => setNewAltitude(Number(e.target.value))} value={newAltitude}></input>
+          New Altitude: <input type="number" size={3} min="0" max="999" onChange={(e) => setNewAltitude(Number(e.target.value))} value={newAltitude}></input>
           ft
         </>
       }
