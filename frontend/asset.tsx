@@ -42,6 +42,7 @@ export const sendAssetCommand = async (knownServers: Record<string, ServerState>
         },
         body: new URLSearchParams(entries)
       }).then((r) => {
+        if (r.status === 403) throw new Error('not authenticated — please refresh and log in')
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
       })
     })
@@ -50,7 +51,7 @@ export const sendAssetCommand = async (knownServers: Record<string, ServerState>
   const failures = results.map((result, i) => ({ result, serverName: assetServers[i].serverName })).filter(({ result }) => result.status === 'rejected')
 
   if (failures.length > 0) {
-    const errorMessages = failures
+    const failureMessages = failures
       .map(({ result, serverName }) => {
         const reason = (result as PromiseRejectedResult).reason
         const msg = reason instanceof Error ? reason.message : String(reason)
@@ -58,7 +59,8 @@ export const sendAssetCommand = async (knownServers: Record<string, ServerState>
       })
       .join(', ')
     const successCount = assetServers.length - failures.length
-    throw new Error(`Command reached ${successCount} of ${assetServers.length} server(s) for ${asset.name}; failed: ${errorMessages}`)
+    const prefix = successCount > 0 ? `Command was sent to ${successCount} of ${assetServers.length} server(s) — aircraft may already be affected. ` : ''
+    throw new Error(`${prefix}Failed on: ${failureMessages}`)
   }
 }
 
