@@ -12,7 +12,14 @@ TIME_ZONE = 'UTC'
 
 # Allow all hosts
 ALLOWED_HOSTS = ['*']
+# NOTE: http:// here is for local Docker development only.
+# In production, all origins must be https:// (see Deployment Requirements in README).
 CSRF_TRUSTED_ORIGINS = ['http://localhost:8080']
+
+# Require the Secure flag on session and CSRF cookies so they are never sent
+# over plain HTTP. All production instances must be served over HTTPS.
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 
 # CORS: list every peer FSS web-server origin so browsers can send credentials
 # cross-origin. Each server must appear in the other servers' lists.
