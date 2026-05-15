@@ -7,7 +7,7 @@ import contextlib
 from django.contrib.gis.geos import Point
 from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import OuterRef, Subquery
-from django.http import HttpResponse, HttpResponseBadRequest, HttpResponseForbidden, JsonResponse
+from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render
 from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 
@@ -294,7 +294,7 @@ def asset_add(request):
         asset_name = request.POST.get('asset_name')
         if asset_name is not None:
             if Asset.objects.filter(name=asset_name).exists():
-                return HttpResponseForbidden("Asset already exists")
+                return HttpResponse("Asset already exists", status=409)
             asset = Asset(name=asset_name)
             asset.save()
             return HttpResponse("Created")
