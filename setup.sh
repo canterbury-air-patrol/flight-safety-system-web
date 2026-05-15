@@ -30,7 +30,7 @@ fi
 
 if [ ! -f fss/secretkey.txt ]
 then
-    python -c 'import random; result = "".join([random.choice("abcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*(-_=+)") for i in range(50)]); print(result)' > fss/secretkey.txt  $
+    python -c "import secrets; print(secrets.token_urlsafe(50))" > fss/secretkey.txt
     echo ""
     echo "Created new secretkey.txt in fss/secretkey.txt"
 fi
