@@ -2,24 +2,9 @@
 
 The web frontend for [Flight Safety System](https://github.com/canterbury-air-patrol/flight-safety-system/) which shows the current status of known assets and allows safety critical commands to be sent to them.
 
-## Getting Started
-
-### Prerequisites
-
-* python3 with venv and pip
-* postgresql with postgis
-
-### Fetching and start
-
-```
-git clone https://github.com/canterbury-air-patrol/flight-safety-system-web.git
-cd flight-safety-system-web
-./setup.sh
-# follow the instructions in the output from setup.sh
-./start.sh
-```
-
 ## Deployment Requirements
+
+These requirements apply to **all** install paths.
 
 ### HTTPS is mandatory
 
@@ -45,24 +30,111 @@ supported.
 
 ### Configure CORS_ALLOWED_ORIGINS on each instance
 
-Each instance must list its peer instances in `CORS_ALLOWED_ORIGINS` inside
-its `local_settings.py`. This allows the browser to send credentials to peer
-servers. Every peer must appear in every other peer's list.
-
-```python
-# local_settings.py
-CORS_ALLOWED_ORIGINS = [
-    'https://fss1.example.com',
-    'https://fss2.example.com',
-]
-```
+Each instance must list its peer instances in `CORS_ALLOWED_ORIGINS`. This
+allows the browser to send credentials to peer servers. Every peer must appear
+in every other peer's list.
 
 A server not listed in its peers' `CORS_ALLOWED_ORIGINS` will still receive
 and store data from aircraft, but the UI loaded from a peer will not be able
 to send authenticated commands to it.
 
-## Deploying
-[Refer to Django uWSGI documentation](https://docs.djangoproject.com/en/6.0/howto/deployment/wsgi/uwsgi/)
+---
+
+## Installing with Docker (recommended for production)
+
+### Prerequisites
+
+- Docker and docker-compose
+
+### Steps
+
+1. **Build the frontend** (must be done before the Docker build):
+
+   ```bash
+   ./build-frontend-docker.sh
+   ```
+
+2. **Create your `.env` file**:
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Edit `.env` and fill in all values. Generate a secret key with:
+
+   ```bash
+   python3 -c "import secrets; print(secrets.token_urlsafe(50))"
+   ```
+
+   For a single-server deployment, set:
+
+   ```
+   ALLOWED_HOSTS=fss.example.com
+   CSRF_TRUSTED_ORIGINS=https://fss.example.com
+   CORS_ALLOWED_ORIGINS=
+   ```
+
+   For multi-server deployments, list all peer origins in `CORS_ALLOWED_ORIGINS`
+   (comma-separated, `https://` required):
+
+   ```
+   ALLOWED_HOSTS=fss1.example.com
+   CSRF_TRUSTED_ORIGINS=https://fss1.example.com
+   CORS_ALLOWED_ORIGINS=https://fss2.example.com,https://fss3.example.com
+   ```
+
+3. **Start the stack**:
+
+   ```bash
+   docker-compose up -d
+   ```
+
+4. Access the UI at `http://localhost:8090` (put a TLS-terminating reverse proxy in front for production).
+
+---
+
+## Installing into a venv (for direct install / systemd service)
+
+### Prerequisites
+
+- python3 with venv and pip
+- Node.js (for the frontend build)
+- PostgreSQL with PostGIS
+
+### Steps
+
+1. **Run the setup script**:
+
+   ```bash
+   git clone https://github.com/canterbury-air-patrol/flight-safety-system-web.git
+   cd flight-safety-system-web
+   ./setup.sh
+   ```
+
+   This creates the venv, installs Python and Node dependencies, builds the
+   frontend, generates a secret key in `fss/secretkey.txt`, and creates
+   `fss/local_settings.py` from the template.
+
+2. **Edit `fss/local_settings.py`** — at minimum set the database connection,
+   `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, and (for multi-server deployments)
+   `CORS_ALLOWED_ORIGINS`.
+
+3. **Run the database migrations**:
+
+   ```bash
+   source venv/bin/activate
+   ./manage.py migrate
+   ./manage.py createsuperuser
+   ```
+
+4. **Start the server**:
+
+   - Development: `./start.sh` (Django dev server, not for production)
+   - Production: `./start-wsgi.sh` (uWSGI on `localhost:8090`; put behind nginx or Apache)
+
+   A systemd unit file is provided in `fss-web.service` for running as a service.
+
+---
 
 ## Authors
 See the list of [contributors](https://github.com/canterbury-air-patrol/flight-safety-system-web/contributors).
