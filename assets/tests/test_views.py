@@ -74,6 +74,14 @@ class AssetAPITest(TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.content.decode(), 'Asset already exists')
 
+    def test_asset_command_set_invalid_command(self):
+        """Test that an unrecognised command is rejected."""
+        self.client.force_login(self.user)
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        response = self.client.post(url, {'command': 'SELFDESTRUCT'})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.content.decode(), 'Invalid command')
+
     def test_asset_command_set_invalid_altitude(self):
         """Test setting an invalid altitude."""
         self.client.force_login(self.user)
