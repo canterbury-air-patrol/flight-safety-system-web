@@ -268,6 +268,9 @@ def asset_command_set(request, asset_id):
         point = None
         altitude = None
         command = request.POST.get('command')
+        valid_commands = dict(AssetCommand.COMMAND_CHOICES)
+        if command not in valid_commands:
+            return HttpResponseBadRequest('Invalid command')
         if command in AssetCommand.REQUIRES_POSITION:
             latitude = request.POST.get('latitude')
             longitude = request.POST.get('longitude')
