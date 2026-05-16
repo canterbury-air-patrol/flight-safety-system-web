@@ -68,6 +68,9 @@ class AssetPosition(models.Model):
     position = models.PointField(geography=True)
     altitude = models.IntegerField(default=0)
 
+    def __str__(self):
+        return f"{self.asset} @ {self.position} alt={self.altitude} ({self.timestamp})"
+
     class Meta:
         indexes = [
             models.Index(fields=['asset', 'timestamp', ]),
@@ -81,6 +84,9 @@ class AssetRTT(models.Model):
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE)
     timestamp = models.DateTimeField(default=timezone.now)
     rtt = models.IntegerField()
+
+    def __str__(self):
+        return f"{self.asset} RTT {self.rtt}ms @ {self.timestamp}"
 
     class Meta:
         indexes = [
