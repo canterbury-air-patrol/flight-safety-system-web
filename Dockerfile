@@ -8,7 +8,7 @@ RUN npm run build-only
 
 # Stage 2: Install Python dependencies
 FROM python:3.14-slim AS python-builder
-RUN apt-get update && apt-get install -y build-essential libgdal-dev && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential libgdal-dev && rm -rf /var/lib/apt/lists/*
 COPY requirements.txt /tmp/
 RUN python3 -m venv /venv && \
     /venv/bin/pip install --no-cache-dir wheel && \
@@ -17,7 +17,7 @@ RUN python3 -m venv /venv && \
 # Stage 3: Runtime image
 FROM python:3.14-slim
 ENV PYTHONUNBUFFERED=1
-RUN apt-get update && apt-get install -y libgdal36 && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends libgdal36 && rm -rf /var/lib/apt/lists/*
 COPY --from=python-builder /venv /venv
 WORKDIR /code
 COPY --from=frontend /app/dist ./dist/
