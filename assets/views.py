@@ -276,7 +276,11 @@ def asset_command_set(request, asset_id):
             latitude = request.POST.get('latitude')
             longitude = request.POST.get('longitude')
             try:
-                point = Point(float(longitude), float(latitude))
+                lat = float(latitude)
+                lng = float(longitude)
+                if not -90 <= lat <= 90 or not -180 <= lng <= 180:
+                    raise ValueError
+                point = Point(lng, lat)
             except (ValueError, TypeError):
                 return HttpResponseBadRequest('Invalid Lat/Long')
         if command in AssetCommand.REQUIRES_ALTITUDE:
