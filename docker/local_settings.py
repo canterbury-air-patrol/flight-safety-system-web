@@ -22,8 +22,10 @@ CSRF_TRUSTED_ORIGINS = [
 
 # Require the Secure flag on session and CSRF cookies so they are never sent
 # over plain HTTP. All production instances must be served over HTTPS.
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+# Set SESSION_COOKIE_SECURE=false or CSRF_COOKIE_SECURE=false only in
+# environments where HTTPS is not available (e.g. integration test runners).
+SESSION_COOKIE_SECURE = os.environ.get('SESSION_COOKIE_SECURE', 'true').lower() != 'false'
+CSRF_COOKIE_SECURE = os.environ.get('CSRF_COOKIE_SECURE', 'true').lower() != 'false'
 # SameSite=Lax is the Django default but we pin it explicitly: the multi-server
 # architecture relies on Lax to allow credentialed cross-origin fetches between
 # FSS instances that share a registered domain (e.g. fss1.example.com →
