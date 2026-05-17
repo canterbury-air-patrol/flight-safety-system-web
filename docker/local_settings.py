@@ -25,6 +25,21 @@ CSRF_TRUSTED_ORIGINS = [
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 
+# HSTS: opt-in via SECURE_HSTS_SECONDS (e.g. 31536000 for 1 year).
+# Only set this when the container is behind a reverse proxy that strips and
+# rewrites X-Forwarded-Proto — without a trusted proxy, clients can forge that
+# header and cause Django to treat HTTP as HTTPS. Leave unset (or 0) when
+# running without a proxy (e.g. local development or direct-port deployments).
+# SECURE_HSTS_INCLUDE_SUBDOMAINS defaults true, covering peer FSS instances on
+# the same domain. SECURE_HSTS_PRELOAD defaults false because preload registration
+# is hard to undo; only enable it for domains that will remain HTTPS permanently.
+_hsts_seconds = int(os.environ.get('SECURE_HSTS_SECONDS', '0'))
+if _hsts_seconds:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    SECURE_HSTS_SECONDS = _hsts_seconds
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'true').lower() == 'true'
+    SECURE_HSTS_PRELOAD = os.environ.get('SECURE_HSTS_PRELOAD', 'false').lower() == 'true'
+
 # Peer FSS server origins for cross-origin credentialed fetches.
 # Each server must appear in the other servers' lists.
 CORS_ALLOWED_ORIGINS = [
