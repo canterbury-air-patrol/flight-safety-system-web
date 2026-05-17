@@ -109,6 +109,20 @@ class AssetAPITest(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.content.decode(), 'Invalid Lat/Long')
 
+    def test_asset_command_set_out_of_range_coordinates(self):
+        """Test that out-of-range lat/lng values are rejected."""
+        self.client.force_login(self.user)
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+
+        response = self.client.post(url, {'command': 'GOTO', 'latitude': 91.0, 'longitude': 172.0})
+        self.assertEqual(response.status_code, 400)
+
+        response = self.client.post(url, {'command': 'GOTO', 'latitude': -43.0, 'longitude': 181.0})
+        self.assertEqual(response.status_code, 400)
+
+        response = self.client.post(url, {'command': 'GOTO', 'latitude': -43.0, 'longitude': 172.0})
+        self.assertEqual(response.status_code, 200)
+
     def test_asset_command_set_missing_params(self):
         """Test setting commands with missing required parameters."""
         self.client.force_login(self.user)
