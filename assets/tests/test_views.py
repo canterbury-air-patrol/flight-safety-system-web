@@ -36,7 +36,7 @@ class AssetAPITest(TestCase):
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
         response = self.client.post(url, {'command': 'RTL'})
         self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.content.decode(), 'Created')
+        self.assertEqual(response.content.decode(), 'Queued')
 
         cmd = AssetCommand.objects.filter(asset=self.asset).latest('timestamp')
         self.assertEqual(cmd.command, 'RTL')

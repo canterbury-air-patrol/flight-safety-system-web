@@ -293,7 +293,7 @@ def asset_command_set(request, asset_id):
         asset_command = AssetCommand(asset=asset, command=command,
                                      position=point, altitude=altitude)
         asset_command.save()
-        return HttpResponse("Created")
+        return HttpResponse("Queued")
     return HttpResponseBadRequest("Only POST is supported")
 
 
