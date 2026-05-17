@@ -59,7 +59,7 @@ export const sendAssetCommand = async (knownServers: Record<string, ServerState>
       })
       .join(', ')
     const successCount = assetServers.length - failures.length
-    const prefix = successCount > 0 ? `Command was sent to ${successCount} of ${assetServers.length} server(s) — aircraft may already be affected. ` : ''
+    const prefix = successCount > 0 ? `Command was queued on ${successCount} of ${assetServers.length} server(s) — aircraft may already be affected. ` : ''
     throw new Error(`${prefix}Failed on: ${failureMessages}`)
   }
 }
