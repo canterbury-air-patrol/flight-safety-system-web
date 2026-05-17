@@ -10,7 +10,7 @@ class Asset(models.Model):
     """
     An asset
     """
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, unique=True)
 
     def __str__(self):
         return f"Asset: {self.name}"
