@@ -24,6 +24,13 @@ CSRF_TRUSTED_ORIGINS = [
 # over plain HTTP. All production instances must be served over HTTPS.
 SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
+# SameSite=Lax is the Django default but we pin it explicitly: the multi-server
+# architecture relies on Lax to allow credentialed cross-origin fetches between
+# FSS instances that share a registered domain (e.g. fss1.example.com →
+# fss2.example.com). Strict would break cross-origin polling; None would weaken
+# CSRF protection. This value must not be changed without reviewing SEC-01/02.
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
 
 # HSTS: opt-in via SECURE_HSTS_SECONDS (e.g. 31536000 for 1 year).
 # Only set this when the container is behind a reverse proxy that strips and
