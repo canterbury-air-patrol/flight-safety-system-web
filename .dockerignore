@@ -7,3 +7,14 @@ fss/secretkey.txt
 __pycache__/
 .vscode/
 todo/
+.github/
+*.md
+requirements-dev.txt
+check-code.sh
+setup.sh
+setup-db.sh
+build-frontend.sh
+build-frontend-docker.sh
+start.sh
+start-wsgi.sh
+.env*
