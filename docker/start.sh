@@ -2,7 +2,7 @@
 set -e
 
 cp docker/local_settings.py fss/local_settings.py
-source venv/bin/activate
+source /venv/bin/activate
 
 ./manage.py migrate
 
