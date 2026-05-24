@@ -25,7 +25,7 @@ def config_data_json(request):
     Return all configuration data as JSON
     """
     assets = list(Asset.objects.all())
-    configs_by_asset_id = {c.asset_id: c for c in AssetConfig.objects.filter(asset__in=assets)}
+    configs_by_asset_id = {c.asset_id: c for c in AssetConfig.objects.filter(asset__in=assets).select_related('smm')}
 
     fss_servers = []
     for s in ServerConfig.objects.all():
