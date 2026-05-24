@@ -15,11 +15,6 @@ class Asset(models.Model):
     def __str__(self):
         return f"Asset: {self.name}"
 
-    class Meta:
-        indexes = [
-            models.Index(fields=['name', ]),
-        ]
-
 
 class AssetSearchProgress(models.Model):
     """
