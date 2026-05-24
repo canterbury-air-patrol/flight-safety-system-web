@@ -17,7 +17,7 @@ RUN python3 -m venv /venv && \
 # Stage 3: Runtime image
 FROM python:3.14-slim
 ENV PYTHONUNBUFFERED=1
-RUN apt-get update && apt-get install -y --no-install-recommends libgdal36 mime-support && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends libgdal36 media-types && rm -rf /var/lib/apt/lists/*
 COPY --from=python-builder /venv /venv
 WORKDIR /code
 COPY --from=frontend /app/dist ./dist/
