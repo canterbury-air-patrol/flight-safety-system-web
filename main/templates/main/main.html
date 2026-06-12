@@ -1,10 +1,10 @@
 <!DOCTYPE html>
+{% load static %}
 <html>
     <head>
         <title>Flight Safety System</title>
-        <base href="/static/" />
-        <link rel="stylesheet" href="main.css">
-        <script type="module" src="main.js"></script>
+        <link rel="stylesheet" href="{% static 'main.css' %}">
+        <script type="module" src="{% static 'main.js' %}"></script>
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
     </head>
     <body>

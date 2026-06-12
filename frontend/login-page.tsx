@@ -2,26 +2,20 @@ import React, { useState, useEffect } from 'react'
 import { Container, Card, Form, Button, Alert } from 'react-bootstrap'
 import { useSearchParams } from 'react-router-dom'
 
+const getCookie = (name: string) =>
+  document.cookie
+    .split(';')
+    .map((cookie) => cookie.trim())
+    .find((cookie) => cookie.startsWith(`${name}=`))
+    ?.slice(name.length + 1) ?? ''
+
 export const LoginPage: React.FC = () => {
   const [csrfToken, setCsrfToken] = useState('')
   const [searchParams] = useSearchParams()
   const hasError = searchParams.get('error') === '1'
 
   useEffect(() => {
-    // Read CSRF token from cookie
-    const name = 'csrftoken='
-    const decodedCookie = decodeURIComponent(document.cookie)
-    const ca = decodedCookie.split(';')
-    for (let i = 0; i < ca.length; i++) {
-      let c = ca[i]
-      while (c.charAt(0) === ' ') {
-        c = c.substring(1)
-      }
-      if (c.indexOf(name) === 0) {
-        setCsrfToken(c.substring(name.length, c.length))
-        break
-      }
-    }
+    setCsrfToken(decodeURIComponent(getCookie('csrftoken')))
   }, [])
 
   return (

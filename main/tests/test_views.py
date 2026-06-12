@@ -122,6 +122,9 @@ class StatusAPITest(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'main/main.html')
+        self.assertNotContains(response, '<base ')
+        self.assertContains(response, 'href="/static/main.css"')
+        self.assertContains(response, 'src="/static/main.js"')
 
     def test_login_page_post_success(self):
         """Test successful login via POST."""
