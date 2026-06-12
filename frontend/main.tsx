@@ -9,11 +9,19 @@ import { ConfigPage } from './config-page'
 import { AssetListPage } from './asset-list-page'
 
 const App: React.FC = () => {
-  const path = window.location.pathname.replace(/\/+$/, '') || '/'
+  const [path, setPath] = React.useState(window.location.pathname)
 
-  if (path === '/login') return <LoginPage />
-  if (path === '/config') return <ConfigPage />
-  if (path === '/assets') return <AssetListPage />
+  React.useEffect(() => {
+    const onLocationChange = () => setPath(window.location.pathname)
+    window.addEventListener('popstate', onLocationChange)
+    return () => window.removeEventListener('popstate', onLocationChange)
+  }, [])
+
+  const normalizedPath = path.replace(/\/+$/, '') || '/'
+
+  if (normalizedPath === '/login') return <LoginPage />
+  if (normalizedPath === '/config') return <ConfigPage />
+  if (normalizedPath === '/assets') return <AssetListPage />
 
   return <FSSMainPage />
 }
