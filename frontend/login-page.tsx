@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react'
 import { Container, Card, Form, Button, Alert } from 'react-bootstrap'
-import { useSearchParams } from 'react-router-dom'
 
 const getCookie = (name: string) =>
   document.cookie
@@ -11,7 +10,7 @@ const getCookie = (name: string) =>
 
 export const LoginPage: React.FC = () => {
   const [csrfToken, setCsrfToken] = useState('')
-  const [searchParams] = useSearchParams()
+  const searchParams = new URLSearchParams(window.location.search)
   const hasError = searchParams.get('error') === '1'
 
   useEffect(() => {

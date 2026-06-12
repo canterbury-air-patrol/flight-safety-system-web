@@ -2,22 +2,21 @@ import 'bootstrap'
 import 'bootstrap/dist/css/bootstrap.css'
 import React from 'react'
 import * as ReactDOM from 'react-dom/client'
-import { BrowserRouter as Router, Navigate, Routes, Route } from 'react-router-dom'
 
 import { FSSMainPage } from './fss-main-page'
 import { LoginPage } from './login-page'
 import { ConfigPage } from './config-page'
 import { AssetListPage } from './asset-list-page'
 
+const App: React.FC = () => {
+  const path = window.location.pathname.replace(/\/+$/, '') || '/'
+
+  if (path === '/login') return <LoginPage />
+  if (path === '/config') return <ConfigPage />
+  if (path === '/assets') return <AssetListPage />
+
+  return <FSSMainPage />
+}
+
 const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement)
-root.render(
-  <Router>
-    <Routes>
-      <Route path="/" element={<FSSMainPage />} />
-      <Route path="/login/*" element={<LoginPage />} />
-      <Route path="/config/*" element={<ConfigPage />} />
-      <Route path="/assets/*" element={<AssetListPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
-  </Router>
-)
+root.render(<App />)
