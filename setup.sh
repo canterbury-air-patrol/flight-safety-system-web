@@ -35,6 +35,8 @@ then
     echo "Created new secretkey.txt in fss/secretkey.txt"
 fi
 
+./manage.py collectstatic --no-input
+
 echo "Start in development mode:"
 echo "./start.sh"
 echo "You may need to create an admin user with './manage.py createsuperuser'"
