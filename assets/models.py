@@ -31,7 +31,7 @@ class AssetSearchProgress(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['asset', 'timestamp', ]),
+            models.Index(fields=['asset', '-timestamp', ]),
         ]
 
 
@@ -50,7 +50,7 @@ class AssetStatus(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['asset', 'timestamp', ]),
+            models.Index(fields=['asset', '-timestamp', ]),
         ]
 
 
@@ -68,7 +68,7 @@ class AssetPosition(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['asset', 'timestamp', ]),
+            models.Index(fields=['asset', '-timestamp', ]),
         ]
 
 
@@ -85,7 +85,7 @@ class AssetRTT(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['asset', 'timestamp', ]),
+            models.Index(fields=['asset', '-timestamp', ]),
         ]
 
 
@@ -116,5 +116,5 @@ class AssetCommand(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['asset', 'timestamp', ]),
+            models.Index(fields=['asset', '-timestamp', ]),
         ]
