@@ -1,6 +1,6 @@
 import { degreesToDM, DMToDegrees } from '@canterbury-air-patrol/deg-converter'
 import { AssetState, AssetServerState, AssetController, createAssetController, mergeServerAssets } from './asset'
-import { ServerState, createServer, getServerURL, serverConnectFailed, serverUnauthenticated, AssetPositionData, mergeServerPollResult } from './server'
+import { ServerState, createServer, getServerURL, serverConnectFailed, serverUnauthenticated, AssetPositionData, AssetCommandData, mergeServerPollResult } from './server'
 import 'bootstrap'
 import 'bootstrap/dist/css/bootstrap.css'
 import L, { DragEndEvent } from 'leaflet'
@@ -28,6 +28,10 @@ const searchTimeOld = 600 * 1000
 
 const rttTimeWarn = 10 * 1000
 const rttTimeOld = 60 * 1000
+
+// How long a command may sit unacknowledged before we treat the missing ack
+// as a problem rather than transient latency.
+const commandAckTimeout = 15 * 1000
 
 L.Icon.Default.prototype.options.iconUrl = markerIcon
 L.Icon.Default.prototype.options.iconRetinaUrl = markerIcon2x
@@ -269,6 +273,31 @@ const dataAgeClass = (timestamp: string, old: number, warn: number, prefix: stri
   return ''
 }
 
+// Render the acknowledgement state of a command as a short suffix plus a CSS
+// class for styling. A 'pending' ack that has outlived commandAckTimeout is
+// reported distinctly ('no ack') so an ack that never arrives is visible
+// rather than looking like it is still in flight.
+const commandAckDisplay = (command: AssetCommandData): { text: string; className: string } => {
+  switch (command.ack_state) {
+    case 'actioned':
+      return { text: '✓ actioned', className: 'asset-command-ack-actioned' }
+    case 'received':
+      return { text: '… received', className: 'asset-command-ack-received' }
+    case 'superseded':
+      return { text: '✗ superseded', className: 'asset-command-ack-superseded' }
+    case 'rejected':
+      return { text: '✗ rejected', className: 'asset-command-ack-rejected' }
+    case 'pending':
+    default: {
+      const age = new Date().getTime() - new Date(command.timestamp).getTime()
+      if (age > commandAckTimeout) {
+        return { text: '⚠ no ack', className: 'asset-command-ack-missing' }
+      }
+      return { text: '… awaiting ack', className: 'asset-command-ack-pending' }
+    }
+  }
+}
+
 const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: string }> = ({ server, serverLabel }) => {
   const { data } = server
   let rttTable
@@ -366,24 +395,28 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: st
     )
   }
   let commandTxt: ReactNode = ''
+  let commandAck: ReactNode = ''
   if (data?.command) {
-    commandTxt = data.command.command
+    let text = data.command.command
     if (data.command.command_code === 'GOTO') {
       if (data.command.lat && data.command.lng) {
-        commandTxt += ` ${degreesToDM(data.command.lat, true)}, ${degreesToDM(data.command.lng, false)}`
+        text += ` ${degreesToDM(data.command.lat, true)}, ${degreesToDM(data.command.lng, false)}`
       }
     }
     if (data.command.command_code === 'ALT') {
-      commandTxt += ` to ${data.command.alt}ft`
+      text += ` to ${data.command.alt}ft`
     }
-    if (data.command.command_code === 'MAN') {
-      commandTxt = <strong>Take Manual Control Now</strong>
-    }
+    commandTxt = data.command.command_code === 'MAN' ? <strong>Take Manual Control Now</strong> : text
+    const ack = commandAckDisplay(data.command)
+    commandAck = <span className={'asset-status-command-ack ' + ack.className}> {ack.text}</span>
   }
   return (
     <div className="asset-status-server">
       <div className="asset-status-server-label">{serverLabel}</div>
-      <div className="asset-status-command">{commandTxt}</div>
+      <div className="asset-status-command">
+        {commandTxt}
+        {commandAck}
+      </div>
       {rttTable}
       {posTable}
       {batteryTable}
