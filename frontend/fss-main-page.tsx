@@ -1,6 +1,16 @@
 import { degreesToDM, DMToDegrees } from '@canterbury-air-patrol/deg-converter'
 import { AssetState, AssetServerState, AssetController, createAssetController, mergeServerAssets } from './asset'
-import { ServerState, createServer, getServerURL, serverConnectFailed, serverUnauthenticated, AssetPositionData, AssetCommandData, mergeServerPollResult } from './server'
+import {
+  ServerState,
+  createServer,
+  getServerURL,
+  serverConnectFailed,
+  serverUnauthenticated,
+  AssetPositionData,
+  AssetCommandData,
+  AckSupersedeReason,
+  mergeServerPollResult
+} from './server'
 import 'bootstrap'
 import 'bootstrap/dist/css/bootstrap.css'
 import L, { DragEndEvent } from 'leaflet'
@@ -273,6 +283,14 @@ const dataAgeClass = (timestamp: string, old: number, warn: number, prefix: stri
   return ''
 }
 
+// Label for the failsafe latch that superseded a command. The latch always
+// engages an RTL, so name it as such for the operator.
+const supersedeReasonLabel: Record<AckSupersedeReason, string> = {
+  none: '',
+  low_battery: 'low-battery RTL',
+  comms_loss: 'comms-loss RTL'
+}
+
 // Render the acknowledgement state of a command as a short suffix plus a CSS
 // class for styling. A 'pending' ack that has outlived commandAckTimeout is
 // reported distinctly ('no ack') so an ack that never arrives is visible
@@ -283,8 +301,12 @@ const commandAckDisplay = (command: AssetCommandData): { text: string; className
       return { text: '✓ actioned', className: 'asset-command-ack-actioned' }
     case 'received':
       return { text: '… received', className: 'asset-command-ack-received' }
-    case 'superseded':
-      return { text: '✗ superseded', className: 'asset-command-ack-superseded' }
+    case 'noop':
+      return { text: '✓ no change', className: 'asset-command-ack-noop' }
+    case 'superseded': {
+      const reason = command.ack_superseded_by && command.ack_superseded_by !== 'none' ? ` by ${supersedeReasonLabel[command.ack_superseded_by]}` : ''
+      return { text: `✗ superseded${reason}`, className: 'asset-command-ack-superseded' }
+    }
     case 'rejected':
       return { text: '✗ rejected', className: 'asset-command-ack-rejected' }
     case 'pending':

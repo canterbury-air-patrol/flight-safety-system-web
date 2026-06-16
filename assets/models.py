@@ -121,16 +121,29 @@ class AssetCommand(models.Model):
     ACK_ACTIONED = 1    # state machine transitioned
     ACK_SUPERSEDED = 2  # not actioned: a higher-priority latch is engaged
     ACK_REJECTED = 3    # unknown/malformed/invalid command
+    ACK_NOOP = 4        # command resolved to the already-current state; nothing changed
     ACK_STATE_CHOICES = (
         (ACK_RECEIVED, "Received"),
         (ACK_ACTIONED, "Actioned"),
         (ACK_SUPERSEDED, "Superseded"),
         (ACK_REJECTED, "Rejected"),
+        (ACK_NOOP, "No change"),
+    )
+    # Reason a command was superseded (fss_command_ack_reason). Distinct from a
+    # command value so e.g. low-battery RTL and comms-loss RTL stay separable.
+    # Only set (non-zero) when ack_state == ACK_SUPERSEDED.
+    SUPERSEDE_NONE = 0
+    SUPERSEDE_LOW_BATTERY = 1
+    SUPERSEDE_COMMS_LOSS = 2
+    SUPERSEDE_REASON_CHOICES = (
+        (SUPERSEDE_NONE, "None"),
+        (SUPERSEDE_LOW_BATTERY, "Low Battery"),
+        (SUPERSEDE_COMMS_LOSS, "Comms Loss"),
     )
     dispatch_id = models.BigIntegerField(null=True, blank=True)
     ack_state = models.SmallIntegerField(null=True, blank=True, choices=ACK_STATE_CHOICES)
     ack_timestamp = models.BigIntegerField(null=True, blank=True)  # FMU wall-clock epoch-ms
-    ack_superseded_by = models.SmallIntegerField(null=True, blank=True)  # fss_asset_command enum int
+    ack_superseded_by = models.SmallIntegerField(null=True, blank=True, choices=SUPERSEDE_REASON_CHOICES)
 
     def __str__(self):
         return f"Command {self.asset} to {self.get_command_display()}"

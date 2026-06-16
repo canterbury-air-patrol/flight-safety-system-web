@@ -184,17 +184,30 @@ class AssetAPITest(TestCase):
         self.assertEqual(data['command']['ack_timestamp'], 1700000000000)
 
     def test_asset_status_json_ack_superseded(self):
-        """A superseded ack carries the superseding-state enum int."""
+        """A superseded ack carries the supersede reason as a code string."""
         self.client.force_login(self.user)
         AssetCommand.objects.create(
             asset=self.asset, command='MAN',
-            ack_state=AssetCommand.ACK_SUPERSEDED, ack_superseded_by=1,
+            ack_state=AssetCommand.ACK_SUPERSEDED,
+            ack_superseded_by=AssetCommand.SUPERSEDE_LOW_BATTERY,
         )
         url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
         response = self.client.get(url)
         data = response.json()
         self.assertEqual(data['command']['ack_state'], 'superseded')
-        self.assertEqual(data['command']['ack_superseded_by'], 1)
+        self.assertEqual(data['command']['ack_superseded_by'], 'low_battery')
+
+    def test_asset_status_json_ack_noop(self):
+        """A noop ack (already-current state) reports ack_state 'noop'."""
+        self.client.force_login(self.user)
+        AssetCommand.objects.create(
+            asset=self.asset, command='RTL', ack_state=AssetCommand.ACK_NOOP,
+        )
+        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
+        response = self.client.get(url)
+        data = response.json()
+        self.assertEqual(data['command']['ack_state'], 'noop')
+        self.assertEqual(data['command']['ack_state_display'], 'No change')
 
     def test_asset_status_json_not_found(self):
         """Test asset_status_json for a non-existent asset."""

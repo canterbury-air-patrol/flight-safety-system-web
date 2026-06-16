@@ -20,6 +20,7 @@ class Migration(migrations.Migration):
                     (1, "Actioned"),
                     (2, "Superseded"),
                     (3, "Rejected"),
+                    (4, "No change"),
                 ],
                 null=True,
             ),
@@ -27,7 +28,15 @@ class Migration(migrations.Migration):
         migrations.AddField(
             model_name="assetcommand",
             name="ack_superseded_by",
-            field=models.SmallIntegerField(blank=True, null=True),
+            field=models.SmallIntegerField(
+                blank=True,
+                choices=[
+                    (0, "None"),
+                    (1, "Low Battery"),
+                    (2, "Comms Loss"),
+                ],
+                null=True,
+            ),
         ),
         migrations.AddField(
             model_name="assetcommand",
