@@ -95,7 +95,8 @@ div.server-label-connected {
   font-size: smaller;
 }
 
-.asset-command-ack-actioned {
+.asset-command-ack-actioned,
+.asset-command-ack-noop {
   color: green;
 }
 

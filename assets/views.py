@@ -93,6 +93,15 @@ ACK_STATE_CODES = {
     AssetCommand.ACK_ACTIONED: 'actioned',
     AssetCommand.ACK_SUPERSEDED: 'superseded',
     AssetCommand.ACK_REJECTED: 'rejected',
+    AssetCommand.ACK_NOOP: 'noop',
+}
+
+# Machine-readable codes for the supersede reason (fss_command_ack_reason),
+# meaningful only when ack_state is 'superseded'.
+ACK_SUPERSEDE_REASON_CODES = {
+    AssetCommand.SUPERSEDE_NONE: 'none',
+    AssetCommand.SUPERSEDE_LOW_BATTERY: 'low_battery',
+    AssetCommand.SUPERSEDE_COMMS_LOSS: 'comms_loss',
 }
 
 
@@ -121,7 +130,7 @@ def _format_command(cmd):
     if cmd.ack_timestamp is not None:
         data['ack_timestamp'] = cmd.ack_timestamp
     if cmd.ack_superseded_by is not None:
-        data['ack_superseded_by'] = cmd.ack_superseded_by
+        data['ack_superseded_by'] = ACK_SUPERSEDE_REASON_CODES.get(cmd.ack_superseded_by, 'none')
     return data
 
 

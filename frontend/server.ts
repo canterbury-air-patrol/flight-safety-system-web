@@ -27,7 +27,8 @@ export interface AssetRTTData {
   rtt_avg: number
 }
 
-export type AckState = 'pending' | 'received' | 'actioned' | 'superseded' | 'rejected'
+export type AckState = 'pending' | 'received' | 'actioned' | 'superseded' | 'rejected' | 'noop'
+export type AckSupersedeReason = 'none' | 'low_battery' | 'comms_loss'
 
 export interface AssetCommandData {
   timestamp: string
@@ -37,13 +38,14 @@ export interface AssetCommandData {
   lng?: number
   alt?: number
   // Acknowledgement state. 'pending' means the command was dispatched but no
-  // ack has been recorded yet. ack_timestamp is the FMU's wall-clock epoch-ms.
-  // ack_superseded_by is the fss_asset_command enum int of the higher-priority
-  // state that blocked actioning, present only when ack_state is 'superseded'.
+  // ack has been recorded yet; 'noop' means it resolved to the already-current
+  // state. ack_timestamp is the FMU's wall-clock epoch-ms. ack_superseded_by is
+  // the reason a command was superseded (which failsafe latch blocked it),
+  // present only when ack_state is 'superseded'.
   ack_state: AckState
   ack_state_display?: string
   ack_timestamp?: number
-  ack_superseded_by?: number
+  ack_superseded_by?: AckSupersedeReason
 }
 
 export interface AssetStatus {
