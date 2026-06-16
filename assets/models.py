@@ -111,6 +111,27 @@ class AssetCommand(models.Model):
     REQUIRES_ALTITUDE = ('ALT', )
     altitude = models.IntegerField(null=True, blank=True)
 
+    # Acknowledgement tracking. The FSS server stamps a per-connection
+    # monotonic id onto the dispatched command message and writes it back to
+    # dispatch_id; the FMU echoes that id in its command-ack, which the server
+    # matches to this row and uses to update the ack_* fields below. These are
+    # all populated server-side, not by this app, so they stay nullable
+    # (a NULL ack_state means dispatched but not yet acknowledged).
+    ACK_RECEIVED = 0    # reached the asset, not yet actioned
+    ACK_ACTIONED = 1    # state machine transitioned
+    ACK_SUPERSEDED = 2  # not actioned: a higher-priority latch is engaged
+    ACK_REJECTED = 3    # unknown/malformed/invalid command
+    ACK_STATE_CHOICES = (
+        (ACK_RECEIVED, "Received"),
+        (ACK_ACTIONED, "Actioned"),
+        (ACK_SUPERSEDED, "Superseded"),
+        (ACK_REJECTED, "Rejected"),
+    )
+    dispatch_id = models.BigIntegerField(null=True, blank=True)
+    ack_state = models.SmallIntegerField(null=True, blank=True, choices=ACK_STATE_CHOICES)
+    ack_timestamp = models.BigIntegerField(null=True, blank=True)  # FMU wall-clock epoch-ms
+    ack_superseded_by = models.SmallIntegerField(null=True, blank=True)  # fss_asset_command enum int
+
     def __str__(self):
         return f"Command {self.asset} to {self.get_command_display()}"
 
