@@ -90,3 +90,32 @@ div.server-label-connected {
   background-color: red;
   font-weight: bold;
 }
+
+.asset-status-command-ack {
+  font-size: smaller;
+}
+
+.asset-command-ack-actioned {
+  color: green;
+}
+
+.asset-command-ack-received {
+  color: blue;
+}
+
+.asset-command-ack-pending {
+  color: gray;
+  font-style: italic;
+}
+
+/* An ack that never arrived must stand out from one still in flight. */
+.asset-command-ack-missing {
+  color: red;
+  font-weight: bold;
+}
+
+.asset-command-ack-superseded,
+.asset-command-ack-rejected {
+  color: orange;
+  font-weight: bold;
+}
