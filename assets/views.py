@@ -85,6 +85,17 @@ def _format_rtts(rtts):
     }
 
 
+# Machine-readable codes for each ack outcome, paired with the human label
+# from AssetCommand.ACK_STATE_CHOICES. The codes are what the frontend
+# switches on; the display label is for convenience.
+ACK_STATE_CODES = {
+    AssetCommand.ACK_RECEIVED: 'received',
+    AssetCommand.ACK_ACTIONED: 'actioned',
+    AssetCommand.ACK_SUPERSEDED: 'superseded',
+    AssetCommand.ACK_REJECTED: 'rejected',
+}
+
+
 def _format_command(cmd):
     if not cmd:
         return None
@@ -98,6 +109,19 @@ def _format_command(cmd):
         data['lng'] = cmd.position.x
     if cmd.altitude is not None:
         data['alt'] = cmd.altitude
+    # Acknowledgement state. ack_state is NULL until the FSS server records an
+    # ack against this command, so a dispatched-but-unacked command reports
+    # 'pending'. ack_timestamp is the FMU's wall-clock epoch-ms, passed through
+    # for the frontend to render.
+    if cmd.ack_state is None:
+        data['ack_state'] = 'pending'
+    else:
+        data['ack_state'] = ACK_STATE_CODES.get(cmd.ack_state, 'pending')
+        data['ack_state_display'] = cmd.get_ack_state_display()
+    if cmd.ack_timestamp is not None:
+        data['ack_timestamp'] = cmd.ack_timestamp
+    if cmd.ack_superseded_by is not None:
+        data['ack_superseded_by'] = cmd.ack_superseded_by
     return data
 
 

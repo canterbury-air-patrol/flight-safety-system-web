@@ -159,6 +159,43 @@ class AssetAPITest(TestCase):
         self.assertEqual(data['command']['command_code'], 'RTL')
         self.assertEqual(data['command']['command'], 'Return to Launch')
 
+    def test_asset_status_json_ack_pending(self):
+        """A dispatched-but-unacked command reports ack_state 'pending'."""
+        self.client.force_login(self.user)
+        AssetCommand.objects.create(asset=self.asset, command='RTL')
+        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
+        response = self.client.get(url)
+        data = response.json()
+        self.assertEqual(data['command']['ack_state'], 'pending')
+        self.assertNotIn('ack_timestamp', data['command'])
+
+    def test_asset_status_json_ack_actioned(self):
+        """An actioned ack is surfaced with its code, label and timestamp."""
+        self.client.force_login(self.user)
+        AssetCommand.objects.create(
+            asset=self.asset, command='RTL',
+            ack_state=AssetCommand.ACK_ACTIONED, ack_timestamp=1700000000000,
+        )
+        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
+        response = self.client.get(url)
+        data = response.json()
+        self.assertEqual(data['command']['ack_state'], 'actioned')
+        self.assertEqual(data['command']['ack_state_display'], 'Actioned')
+        self.assertEqual(data['command']['ack_timestamp'], 1700000000000)
+
+    def test_asset_status_json_ack_superseded(self):
+        """A superseded ack carries the superseding-state enum int."""
+        self.client.force_login(self.user)
+        AssetCommand.objects.create(
+            asset=self.asset, command='MAN',
+            ack_state=AssetCommand.ACK_SUPERSEDED, ack_superseded_by=1,
+        )
+        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
+        response = self.client.get(url)
+        data = response.json()
+        self.assertEqual(data['command']['ack_state'], 'superseded')
+        self.assertEqual(data['command']['ack_superseded_by'], 1)
+
     def test_asset_status_json_not_found(self):
         """Test asset_status_json for a non-existent asset."""
         self.client.force_login(self.user)
