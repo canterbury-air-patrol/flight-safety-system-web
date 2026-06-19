@@ -197,6 +197,20 @@ class AssetAPITest(TestCase):
         self.assertEqual(data['command']['ack_state'], 'superseded')
         self.assertEqual(data['command']['ack_superseded_by'], 'low_battery')
 
+    def test_asset_status_json_ack_superseded_newer_command(self):
+        """A command superseded by a newer command reports that reason code."""
+        self.client.force_login(self.user)
+        AssetCommand.objects.create(
+            asset=self.asset, command='MAN',
+            ack_state=AssetCommand.ACK_SUPERSEDED,
+            ack_superseded_by=AssetCommand.SUPERSEDE_NEWER_COMMAND,
+        )
+        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
+        response = self.client.get(url)
+        data = response.json()
+        self.assertEqual(data['command']['ack_state'], 'superseded')
+        self.assertEqual(data['command']['ack_superseded_by'], 'newer_command')
+
     def test_asset_status_json_ack_noop(self):
         """A noop ack (already-current state) reports ack_state 'noop'."""
         self.client.force_login(self.user)

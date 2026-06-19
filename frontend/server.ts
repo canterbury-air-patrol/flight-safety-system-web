@@ -28,7 +28,7 @@ export interface AssetRTTData {
 }
 
 export type AckState = 'pending' | 'received' | 'actioned' | 'superseded' | 'rejected' | 'noop'
-export type AckSupersedeReason = 'none' | 'low_battery' | 'comms_loss'
+export type AckSupersedeReason = 'none' | 'low_battery' | 'comms_loss' | 'newer_command'
 
 export interface AssetCommandData {
   timestamp: string

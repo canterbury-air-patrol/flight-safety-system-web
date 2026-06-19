@@ -102,6 +102,7 @@ ACK_SUPERSEDE_REASON_CODES = {
     AssetCommand.SUPERSEDE_NONE: 'none',
     AssetCommand.SUPERSEDE_LOW_BATTERY: 'low_battery',
     AssetCommand.SUPERSEDE_COMMS_LOSS: 'comms_loss',
+    AssetCommand.SUPERSEDE_NEWER_COMMAND: 'newer_command',
 }
 
 

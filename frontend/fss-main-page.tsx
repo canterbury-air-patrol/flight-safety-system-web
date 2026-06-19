@@ -283,12 +283,14 @@ const dataAgeClass = (timestamp: string, old: number, warn: number, prefix: stri
   return ''
 }
 
-// Label for the failsafe latch that superseded a command. The latch always
-// engages an RTL, so name it as such for the operator.
+// Label for the reason a command was superseded. The failsafe latches always
+// engage an RTL, so name those as such for the operator; a newer command
+// simply overrides the older one and is not an RTL.
 const supersedeReasonLabel: Record<AckSupersedeReason, string> = {
   none: '',
   low_battery: 'low-battery RTL',
-  comms_loss: 'comms-loss RTL'
+  comms_loss: 'comms-loss RTL',
+  newer_command: 'newer command'
 }
 
 // Age (ms) of a command's most recent acknowledgement activity. Prefers the

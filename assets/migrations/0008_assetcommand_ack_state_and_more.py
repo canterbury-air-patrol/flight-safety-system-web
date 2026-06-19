@@ -34,6 +34,7 @@ class Migration(migrations.Migration):
                     (0, "None"),
                     (1, "Low Battery"),
                     (2, "Comms Loss"),
+                    (3, "Newer Command"),
                 ],
                 null=True,
             ),

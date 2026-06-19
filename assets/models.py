@@ -135,10 +135,12 @@ class AssetCommand(models.Model):
     SUPERSEDE_NONE = 0
     SUPERSEDE_LOW_BATTERY = 1
     SUPERSEDE_COMMS_LOSS = 2
+    SUPERSEDE_NEWER_COMMAND = 3
     SUPERSEDE_REASON_CHOICES = (
         (SUPERSEDE_NONE, "None"),
         (SUPERSEDE_LOW_BATTERY, "Low Battery"),
         (SUPERSEDE_COMMS_LOSS, "Comms Loss"),
+        (SUPERSEDE_NEWER_COMMAND, "Newer Command"),
     )
     dispatch_id = models.BigIntegerField(null=True, blank=True)
     ack_state = models.SmallIntegerField(null=True, blank=True, choices=ACK_STATE_CHOICES)
