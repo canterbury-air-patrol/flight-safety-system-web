@@ -291,15 +291,28 @@ const supersedeReasonLabel: Record<AckSupersedeReason, string> = {
   comms_loss: 'comms-loss RTL'
 }
 
+// Age (ms) of a command's most recent acknowledgement activity. Prefers the
+// FMU-stamped ack_timestamp (wall-clock epoch-ms) when a phase-1 ack has been
+// recorded, otherwise falls back to when the command was dispatched.
+const commandAckAge = (command: AssetCommandData): number => {
+  const basis = command.ack_timestamp ?? new Date(command.timestamp).getTime()
+  return new Date().getTime() - basis
+}
+
 // Render the acknowledgement state of a command as a short suffix plus a CSS
-// class for styling. A 'pending' ack that has outlived commandAckTimeout is
-// reported distinctly ('no ack') so an ack that never arrives is visible
-// rather than looking like it is still in flight.
+// class for styling. An ack that has outlived commandAckTimeout is reported
+// distinctly ('no ack') so an ack that never arrives is visible rather than
+// looking like it is still in flight. This covers both a 'pending' command
+// that was never acknowledged at all and a 'received' command whose terminal
+// (actioned/superseded/…) ack never followed the phase-1 ack.
 const commandAckDisplay = (command: AssetCommandData): { text: string; className: string } => {
   switch (command.ack_state) {
     case 'actioned':
       return { text: '✓ actioned', className: 'asset-command-ack-actioned' }
     case 'received':
+      if (commandAckAge(command) > commandAckTimeout) {
+        return { text: '⚠ no ack', className: 'asset-command-ack-missing' }
+      }
       return { text: '… received', className: 'asset-command-ack-received' }
     case 'noop':
       return { text: '✓ no change', className: 'asset-command-ack-noop' }
@@ -310,13 +323,11 @@ const commandAckDisplay = (command: AssetCommandData): { text: string; className
     case 'rejected':
       return { text: '✗ rejected', className: 'asset-command-ack-rejected' }
     case 'pending':
-    default: {
-      const age = new Date().getTime() - new Date(command.timestamp).getTime()
-      if (age > commandAckTimeout) {
+    default:
+      if (commandAckAge(command) > commandAckTimeout) {
         return { text: '⚠ no ack', className: 'asset-command-ack-missing' }
       }
       return { text: '… awaiting ack', className: 'asset-command-ack-pending' }
-    }
   }
 }
 
