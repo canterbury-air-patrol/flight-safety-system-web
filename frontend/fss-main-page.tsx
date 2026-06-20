@@ -298,7 +298,7 @@ const supersedeReasonLabel: Record<AckSupersedeReason, string> = {
 // recorded, otherwise falls back to when the command was dispatched.
 const commandAckAge = (command: AssetCommandData): number => {
   const basis = command.ack_timestamp ?? new Date(command.timestamp).getTime()
-  return new Date().getTime() - basis
+  return Date.now() - basis
 }
 
 // Render the acknowledgement state of a command as a short suffix plus a CSS
