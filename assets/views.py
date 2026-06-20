@@ -228,9 +228,11 @@ def bulk_asset_status_data(assets):
     asset_ids = [a.pk for a in annotated_assets]
     if asset_ids:
         placeholders = ','.join(['%s'] * len(asset_ids))
+        table_name = AssetRTT._meta.db_table
         for rtt in AssetRTT.objects.raw(
             "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY asset_id ORDER BY timestamp DESC) AS rn "
-            f"FROM assets_assetrtt WHERE asset_id IN ({placeholders})) t WHERE rn <= %s",
+            f"FROM {table_name} WHERE asset_id IN ({placeholders})) t WHERE rn <= %s "
+            "ORDER BY asset_id, rn",
             [*asset_ids, RTT_SAMPLE_LIMIT]
         ):
             rtts_by_asset.setdefault(rtt.asset_id, []).append(rtt)
