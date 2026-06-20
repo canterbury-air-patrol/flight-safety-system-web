@@ -142,7 +142,7 @@ class AssetCommand(models.Model):
         (SUPERSEDE_COMMS_LOSS, "Comms Loss"),
         (SUPERSEDE_NEWER_COMMAND, "Newer Command"),
     )
-    dispatch_id = models.BigIntegerField(null=True, blank=True)
+    dispatch_id = models.BigIntegerField(null=True, blank=True, db_index=True)
     ack_state = models.SmallIntegerField(null=True, blank=True, choices=ACK_STATE_CHOICES)
     ack_timestamp = models.BigIntegerField(null=True, blank=True)  # FMU wall-clock epoch-ms
     ack_superseded_by = models.SmallIntegerField(null=True, blank=True, choices=SUPERSEDE_REASON_CHOICES)
@@ -153,4 +153,14 @@ class AssetCommand(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=['asset', '-timestamp', ]),
+        ]
+        constraints = [
+            # A concrete supersede reason is only meaningful when the command
+            # was actually superseded; NULL / SUPERSEDE_NONE stay unconstrained.
+            # Literals (SUPERSEDE_NONE=0, ACK_SUPERSEDED=2) because the nested
+            # Meta scope can't see the enclosing class attributes.
+            models.CheckConstraint(
+                name="ack_superseded_by_requires_superseded_state",
+                condition=models.Q(ack_superseded_by__isnull=True) | models.Q(ack_superseded_by=0) | models.Q(ack_state=2),
+            ),
         ]
