@@ -12,7 +12,31 @@ TIME_ZONE = 'UTC'
 
 # Update this with your hostname
 ALLOWED_HOSTS = ['localhost']
-CSRF_TRUSTED_ORIGINS = ['http://localhost:8080']
+CSRF_TRUSTED_ORIGINS = ['https://localhost']
+
+# Security: every production FSS instance must be served over HTTPS (see
+# README). These flags stop the session and CSRF cookies ever being sent over
+# plain HTTP. They default on so a venv/systemd deployment is as hardened as the
+# Docker one; set them to False only for local development without TLS (logging
+# in over http://localhost will not work while they are True).
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
+# SameSite=Lax is Django's default, pinned explicitly: the multi-server model
+# relies on Lax so credentialed cross-origin fetches between peer instances on a
+# shared registered domain (fss1.example.com -> fss2.example.com) carry cookies.
+# Strict breaks cross-origin polling; None weakens CSRF protection.
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+
+# HSTS: enable once the instance is served over HTTPS behind a trusted reverse
+# proxy. Only set SECURE_PROXY_SSL_HEADER when that proxy strips and re-sets
+# X-Forwarded-Proto, otherwise clients can forge it and Django will treat HTTP
+# as HTTPS. Uncomment the block to enable.
+# SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# SECURE_HSTS_SECONDS = 31536000
+# SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+# SECURE_HSTS_PRELOAD = False
 
 # Database
 # https://docs.djangoproject.com/en/2.1/ref/settings/#databases
