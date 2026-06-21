@@ -5,6 +5,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from assets.models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetStatus
 from config.models import ServerConfig
@@ -39,6 +40,19 @@ class StatusAPITest(TestCase):
         self.assertEqual(len(data['assets']), 1)
         self.assertEqual(data['assets'][0]['asset']['name'], 'Test Drone')
         self.assertIn('csrfToken', data)
+
+    def test_all_status_data_server_now(self):
+        """The status response carries the server's current time (epoch-ms)."""
+        self.client.login(username='testuser', password='password')
+        url = reverse('all_status_data')
+        before = int(timezone.now().timestamp() * 1000)
+        response = self.client.get(url)
+        after = int(timezone.now().timestamp() * 1000)
+        data = response.json()
+        self.assertIn('server_now', data)
+        self.assertIsInstance(data['server_now'], int)
+        self.assertGreaterEqual(data['server_now'], before)
+        self.assertLessEqual(data['server_now'], after)
 
     def test_all_status_data_with_details(self):
         """Test with position and status data."""

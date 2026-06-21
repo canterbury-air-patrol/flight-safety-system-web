@@ -293,12 +293,17 @@ const supersedeReasonLabel: Record<AckSupersedeReason, string> = {
   newer_command: 'newer command'
 }
 
-// Age (ms) of a command's most recent acknowledgement activity. Prefers the
-// FMU-stamped ack_timestamp (wall-clock epoch-ms) when a phase-1 ack has been
-// recorded, otherwise falls back to when the command was dispatched.
-const commandAckAge = (command: AssetCommandData): number => {
-  const basis = command.ack_timestamp ?? new Date(command.timestamp).getTime()
-  return Date.now() - basis
+// Age (ms) of a command since it was dispatched, measured entirely on the
+// server's clock: serverNow (epoch-ms from the same poll) minus the command's
+// dispatch timestamp. This deliberately avoids the browser clock and the
+// FMU-stamped ack_timestamp — mixing clocks lets skew (corrected elsewhere via
+// RTT offset) produce a false 'no ack' or a timeout that never fires. When the
+// server clock is unavailable, fall back to the browser clock so a missing
+// ack still eventually surfaces rather than appearing stuck forever.
+const commandAckAge = (command: AssetCommandData, serverNow?: number): number => {
+  const dispatched = new Date(command.timestamp).getTime()
+  const now = serverNow ?? Date.now()
+  return now - dispatched
 }
 
 // Render the acknowledgement state of a command as a short suffix plus a CSS
@@ -307,12 +312,12 @@ const commandAckAge = (command: AssetCommandData): number => {
 // looking like it is still in flight. This covers both a 'pending' command
 // that was never acknowledged at all and a 'received' command whose terminal
 // (actioned/superseded/…) ack never followed the phase-1 ack.
-const commandAckDisplay = (command: AssetCommandData): { text: string; className: string } => {
+const commandAckDisplay = (command: AssetCommandData, serverNow?: number): { text: string; className: string } => {
   switch (command.ack_state) {
     case 'actioned':
       return { text: '✓ actioned', className: 'asset-command-ack-actioned' }
     case 'received':
-      if (commandAckAge(command) > commandAckTimeout) {
+      if (commandAckAge(command, serverNow) > commandAckTimeout) {
         return { text: '⚠ no ack', className: 'asset-command-ack-missing' }
       }
       return { text: '… received', className: 'asset-command-ack-received' }
@@ -326,7 +331,7 @@ const commandAckDisplay = (command: AssetCommandData): { text: string; className
       return { text: '✗ rejected', className: 'asset-command-ack-rejected' }
     case 'pending':
     default:
-      if (commandAckAge(command) > commandAckTimeout) {
+      if (commandAckAge(command, serverNow) > commandAckTimeout) {
         return { text: '⚠ no ack', className: 'asset-command-ack-missing' }
       }
       return { text: '… awaiting ack', className: 'asset-command-ack-pending' }
@@ -442,7 +447,7 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: st
       text += ` to ${data.command.alt}ft`
     }
     commandTxt = data.command.command_code === 'MAN' ? <strong>Take Manual Control Now</strong> : text
-    const ack = commandAckDisplay(data.command)
+    const ack = commandAckDisplay(data.command, server.serverNow)
     commandAck = <span className={'asset-status-command-ack ' + ack.className}> {ack.text}</span>
   }
   return (
@@ -615,7 +620,7 @@ export const FSSMainPage: React.FC = () => {
         }
       } else {
         currentServers = mergeServerPollResult(currentServers, serverName, data)
-        currentAssets = mergeServerAssets(currentAssets, serverName, data.assets)
+        currentAssets = mergeServerAssets(currentAssets, serverName, data.assets, data.server_now)
       }
     }
 

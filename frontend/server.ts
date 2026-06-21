@@ -70,6 +70,10 @@ export interface ServerDetails {
 export interface StatusData {
   currentUser?: string
   csrfToken: string
+  // The server's current time (epoch-ms) when this status was produced. Used to
+  // age commands against a single server clock rather than the browser clock,
+  // which clock skew (corrected elsewhere via RTT offset) would corrupt.
+  server_now?: number
   servers: Array<ServerDetails>
   assets: Array<AssetStatus>
 }

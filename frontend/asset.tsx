@@ -11,6 +11,9 @@ export interface AssetServerState {
   serverName: string
   assetPk: number
   data?: AssetStatus
+  // The server's current time (epoch-ms) from the poll that produced `data`.
+  // Lets command ages be computed against this server's clock alone.
+  serverNow?: number
 }
 
 export interface AssetState {
@@ -76,7 +79,7 @@ export const assetPositionMostRecent = (asset: AssetState): AssetPositionData | 
   return best
 }
 
-export const mergeServerAssets = (currentAssets: Record<string, AssetState>, serverName: string, assets: AssetStatus[]): Record<string, AssetState> => {
+export const mergeServerAssets = (currentAssets: Record<string, AssetState>, serverName: string, assets: AssetStatus[], serverNow?: number): Record<string, AssetState> => {
   const nextAssets = { ...currentAssets }
   for (const assetData of assets) {
     const assetName = assetData.asset.name
@@ -84,7 +87,8 @@ export const mergeServerAssets = (currentAssets: Record<string, AssetState>, ser
     const assetServer: AssetServerState = {
       serverName,
       assetPk: assetData.asset.pk,
-      data: assetData
+      data: assetData,
+      serverNow
     }
     nextAssets[assetName] = {
       ...existing,
