@@ -120,3 +120,25 @@ div.server-label-connected {
   color: orange;
   font-weight: bold;
 }
+
+/* Asset-level warning that the servers disagree about the current command. */
+.asset-command-misalignment {
+  text-align: center;
+}
+
+.asset-command-misalignment-badge {
+  border: none;
+  background: none;
+  color: red;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.asset-command-misalignment-detail {
+  margin: 0 auto;
+  font-size: smaller;
+}
+
+.asset-command-misalignment-detail td {
+  padding: 0 0.5em;
+}
