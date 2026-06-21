@@ -362,6 +362,109 @@ const commandAckDisplay = (command: AssetCommandData, serverNow?: number): { tex
   }
 }
 
+// A stable category for a command's acknowledgement outcome, used to compare
+// servers against each other. Unlike commandAckDisplay's text this collapses the
+// transient in-flight phases (pending/received before the timeout) into a single
+// 'in-flight' bucket so two servers a poll apart aren't flagged as disagreeing
+// over normal latency. A timed-out pending becomes 'no-ack', a timed-out
+// received becomes 'received-stalled', and an RTL kept in effect by a failsafe
+// latch is treated as actioned (it is doing what was asked).
+type AckOutcome = 'actioned' | 'noop' | 'in-flight' | 'no-ack' | 'received-stalled' | 'superseded' | 'rejected'
+
+const commandAckOutcome = (command: AssetCommandData, serverNow?: number): AckOutcome => {
+  switch (command.ack_state) {
+    case 'actioned':
+      return 'actioned'
+    case 'noop':
+      return 'noop'
+    case 'rejected':
+      return 'rejected'
+    case 'superseded':
+      return supersededRtlInEffect(command) ? 'actioned' : 'superseded'
+    case 'received':
+      return commandAckAge(command, serverNow) > commandAckTimeout ? 'received-stalled' : 'in-flight'
+    case 'pending':
+    default:
+      return commandAckAge(command, serverNow) > commandAckTimeout ? 'no-ack' : 'in-flight'
+  }
+}
+
+// Per-server view of an asset's command, for the misalignment indicator.
+interface ServerCommandView {
+  serverName: string
+  commandCode?: string
+  ack: { text: string; className: string }
+  outcome?: AckOutcome
+}
+
+// Compare what each of an asset's servers believes about its current command.
+// Servers "disagree" when they hold different command_codes (the operator's
+// command didn't reach all of them, or they hold different/stale commands) OR
+// when they hold the same command but report divergent ack outcomes (e.g.
+// actioned on one, no-ack/superseded/rejected on another). Servers without
+// command data are ignored. Returns the per-server breakdown plus whether the
+// servers that DO have a command disagree; with fewer than two such servers
+// there is nothing to disagree about.
+const assetServerMisalignment = (asset: AssetState): { disagree: boolean; servers: ServerCommandView[] } => {
+  const servers: ServerCommandView[] = []
+  for (const assetServer of Object.values(asset.servers)) {
+    const command = assetServer.data?.command
+    if (!command) continue
+    servers.push({
+      serverName: assetServer.serverName,
+      commandCode: command.command_code,
+      ack: commandAckDisplay(command, assetServer.serverNow),
+      outcome: commandAckOutcome(command, assetServer.serverNow)
+    })
+  }
+  let disagree = false
+  if (servers.length > 1) {
+    const codes = new Set(servers.map((s) => s.commandCode))
+    const outcomes = new Set(servers.map((s) => s.outcome))
+    disagree = codes.size > 1 || outcomes.size > 1
+  }
+  return { disagree, servers }
+}
+
+// Asset-level banner shown when an asset's servers disagree about its command.
+// Surfaces a split that is otherwise buried in the separate per-server tabs:
+// the operator can see at a glance that the servers are out of step and, by
+// expanding, exactly which server differs and how.
+const FSSAssetCommandMisalignment: React.FC<{ asset: AssetState }> = ({ asset }) => {
+  const [expanded, setExpanded] = useState(false)
+  const { disagree, servers } = assetServerMisalignment(asset)
+  if (!disagree) {
+    return null
+  }
+  return (
+    <div className="asset-command-misalignment">
+      <button type="button" className="asset-command-misalignment-badge" onClick={() => setExpanded((e) => !e)} aria-expanded={expanded}>
+        ⚠ servers disagree {expanded ? '▾' : '▸'}
+      </button>
+      {expanded && (
+        <table className="asset-command-misalignment-detail">
+          <thead>
+            <tr>
+              <td>Server</td>
+              <td>Command</td>
+              <td>Ack</td>
+            </tr>
+          </thead>
+          <tbody>
+            {servers.map((s) => (
+              <tr key={s.serverName}>
+                <td>{s.serverName}</td>
+                <td>{s.commandCode ?? '—'}</td>
+                <td className={s.ack.className}>{s.ack.text}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
 const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: string }> = ({ server, serverLabel }) => {
   const { data } = server
   let rttTable
@@ -503,6 +606,7 @@ const FSSAssetStatus: React.FC<FSSAssetStatusProps> = ({ asset, setSelected }) =
 
   return (
     <div className="container card">
+      <FSSAssetCommandMisalignment asset={asset} />
       <ul className="nav nav-tabs server-tab-btn">
         {assetServers.map((server) => (
           <li className="nav-item" key={server.serverName}>
