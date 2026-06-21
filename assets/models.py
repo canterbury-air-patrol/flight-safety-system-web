@@ -2,6 +2,7 @@
 Database models for Assets and associated data
 """
 
+from django.conf import settings
 from django.contrib.gis.db import models
 from django.utils import timezone
 
@@ -110,6 +111,16 @@ class AssetCommand(models.Model):
     position = models.PointField(geography=True, null=True, blank=True)
     REQUIRES_ALTITUDE = ('ALT', )
     altitude = models.IntegerField(null=True, blank=True)
+
+    # Who dispatched this command, recorded for the audit trail of a
+    # safety-critical action (a TERM/DISARM can destroy the aircraft). NULL when
+    # the row was not created by an authenticated web user (e.g. rows predating
+    # this field) or after that account is deleted: SET_NULL preserves the
+    # command record rather than cascading the audit history away with the user.
+    issued_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+',
+    )
 
     # Acknowledgement tracking. The FSS server stamps a per-connection
     # monotonic id onto the dispatched command message and writes it back to

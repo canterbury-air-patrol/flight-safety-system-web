@@ -40,6 +40,20 @@ class AssetAPITest(TestCase):
 
         cmd = AssetCommand.objects.filter(asset=self.asset).latest('timestamp')
         self.assertEqual(cmd.command, 'RTL')
+        self.assertEqual(cmd.issued_by, self.user)
+
+    def test_asset_command_records_issuer(self):
+        """The issuing user is recorded on the command and surfaced in the API."""
+        self.client.force_login(self.user)
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        self.client.post(url, {'command': 'TERM'})
+
+        cmd = AssetCommand.objects.filter(asset=self.asset).latest('timestamp')
+        self.assertEqual(cmd.issued_by, self.user)
+
+        status_url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
+        data = self.client.get(status_url).json()
+        self.assertEqual(data['command']['issued_by'], 'testuser')
 
     def test_asset_command_set_goto(self):
         """Test setting GOTO command with coordinates."""

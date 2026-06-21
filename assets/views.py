@@ -125,6 +125,9 @@ def _format_command(cmd):
         'timestamp': cmd.timestamp,
         'command': cmd.get_command_display(),
         'command_code': cmd.command,
+        # Who dispatched the command (audit trail); NULL for legacy rows or a
+        # since-deleted account.
+        'issued_by': cmd.issued_by.username if cmd.issued_by else None,
     }
     if cmd.position:
         data['lat'] = cmd.position.y
@@ -205,7 +208,7 @@ def asset_status_data(asset):
         )
 
     with contextlib.suppress(ObjectDoesNotExist):
-        command = AssetCommand.objects.filter(asset=asset).latest('timestamp')
+        command = AssetCommand.objects.filter(asset=asset).select_related('issued_by').latest('timestamp')
 
     return format_asset_status(
         asset,
@@ -264,7 +267,7 @@ def bulk_asset_status_data(assets):
             c.asset_id: c
             for c in AssetCommand.objects.filter(
                 pk__in=[a.cmd_id for a in annotated_assets if a.cmd_id]
-            )
+            ).select_related('issued_by')
         },
     }
 
@@ -340,7 +343,8 @@ def asset_command_set(request, asset_id):
             except (ValueError, TypeError):
                 return HttpResponseBadRequest('Invalid Altitude')
         asset_command = AssetCommand(asset=asset, command=command,
-                                     position=point, altitude=altitude)
+                                     position=point, altitude=altitude,
+                                     issued_by=request.user)
         asset_command.save()
         return HttpResponse("Queued")
     return HttpResponseBadRequest("Only POST is supported")
