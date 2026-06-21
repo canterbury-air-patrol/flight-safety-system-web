@@ -342,9 +342,13 @@ def asset_command_set(request, asset_id):
                     raise ValueError
             except (ValueError, TypeError):
                 return HttpResponseBadRequest('Invalid Altitude')
+        # @login_required_api guarantees an authenticated user here; guard
+        # anyway so that decorator changing can't try to assign an AnonymousUser
+        # to the FK. None keeps the command row, just without an attributed user.
+        issued_by = request.user if request.user.is_authenticated else None
         asset_command = AssetCommand(asset=asset, command=command,
                                      position=point, altitude=altitude,
-                                     issued_by=request.user)
+                                     issued_by=issued_by)
         asset_command.save()
         return HttpResponse("Queued")
     return HttpResponseBadRequest("Only POST is supported")
