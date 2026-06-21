@@ -11,10 +11,24 @@ from .models import Asset, AssetCommand
 class AssetCommandAdmin(admin.ModelAdmin):
     """
     Read-only audit view of dispatched commands, including who issued each one.
+
+    Commands are an audit trail: the admin can browse and filter them but must
+    not add, edit, or delete rows, so the permission hooks below all deny
+    modification and bulk actions are disabled.
     """
     list_display = ('timestamp', 'asset', 'command', 'issued_by', 'ack_state')
     list_filter = ('command', 'ack_state', 'issued_by')
     date_hierarchy = 'timestamp'
+    actions = None
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 admin.site.register(Asset)
