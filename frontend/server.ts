@@ -37,6 +37,9 @@ export interface AssetCommandData {
   lat?: number
   lng?: number
   alt?: number
+  // Username of the operator who dispatched the command (audit trail); null for
+  // legacy rows or a since-deleted account.
+  issued_by?: string | null
   // Acknowledgement state. 'pending' means the command was dispatched but no
   // ack has been recorded yet; 'noop' means it resolved to the already-current
   // state. ack_timestamp is the FMU's wall-clock epoch-ms. ack_superseded_by is
