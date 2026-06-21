@@ -293,6 +293,22 @@ const supersedeReasonLabel: Record<AckSupersedeReason, string> = {
   newer_command: 'newer command'
 }
 
+// Short name for the failsafe latch that engaged an RTL, used when an operator
+// RTL was 'superseded' by a latch that ALSO flies RTL — the aircraft is doing
+// what was asked, so we report it as in-effect rather than as a failure.
+const supersedeLatchLabel: Partial<Record<AckSupersedeReason, string>> = {
+  low_battery: 'low-battery',
+  comms_loss: 'comms-loss'
+}
+
+// True when a 'superseded' RTL command is in effect anyway: the operator asked
+// for RTL and a failsafe latch (low-battery / comms-loss) that also flies RTL
+// took over. The operator's intent is satisfied, so this should not read as a
+// red ✗ failure. A newer-command supersede or any non-RTL command is a real
+// override and keeps the ✗.
+const supersededRtlInEffect = (command: AssetCommandData): boolean =>
+  command.command_code === 'RTL' && command.ack_superseded_by !== undefined && command.ack_superseded_by in supersedeLatchLabel
+
 // Age (ms) of a command since it was dispatched, measured entirely on the
 // server's clock: serverNow (epoch-ms from the same poll) minus the command's
 // dispatch timestamp. This deliberately avoids the browser clock and the
@@ -317,13 +333,21 @@ const commandAckDisplay = (command: AssetCommandData, serverNow?: number): { tex
     case 'actioned':
       return { text: '✓ actioned', className: 'asset-command-ack-actioned' }
     case 'received':
+      // A 'received' command reached the asset (phase-1 ack) but no terminal
+      // (actioned/superseded/…) ack followed. Distinguish this stalled-result
+      // case from a command that was never acknowledged at all ('no ack'): the
+      // operator knows it arrived but the outcome is unknown.
       if (commandAckAge(command, serverNow) > commandAckTimeout) {
-        return { text: '⚠ no ack', className: 'asset-command-ack-missing' }
+        return { text: '⚠ received, no result', className: 'asset-command-ack-missing' }
       }
       return { text: '… received', className: 'asset-command-ack-received' }
     case 'noop':
       return { text: '✓ no change', className: 'asset-command-ack-noop' }
     case 'superseded': {
+      if (supersededRtlInEffect(command)) {
+        const latch = supersedeLatchLabel[command.ack_superseded_by as AckSupersedeReason]
+        return { text: `✓ RTL active (${latch})`, className: 'asset-command-ack-actioned' }
+      }
       const reason = command.ack_superseded_by && command.ack_superseded_by !== 'none' ? ` by ${supersedeReasonLabel[command.ack_superseded_by]}` : ''
       return { text: `✗ superseded${reason}`, className: 'asset-command-ack-superseded' }
     }
