@@ -18,8 +18,13 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 try:
     # pylint: disable=W0401,W0614
     from fss.local_settings import *
-except ImportError:
-    pass
+except ModuleNotFoundError as exc:
+    # Only tolerate a genuinely-absent local_settings. A ModuleNotFoundError
+    # raised by a bad import *inside* local_settings names that other module,
+    # not fss.local_settings; re-raise it rather than booting with a half-built
+    # configuration (e.g. no DATABASES) and a confusing downstream failure.
+    if exc.name != 'fss.local_settings':
+        raise
 
 
 # Quick-start development settings - unsuitable for production
