@@ -9,6 +9,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import OuterRef, Subquery
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render
+from django.utils import timezone
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from fss.decorators import login_required_api
@@ -16,6 +17,17 @@ from fss.decorators import login_required_api
 from .models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
 
 RTT_SAMPLE_LIMIT = 15
+
+
+def server_now_ms():
+    """
+    The server's current time as epoch milliseconds.
+
+    Emitted alongside status data so the frontend can age commands against a
+    single server clock (server_now - command.timestamp) rather than mixing the
+    browser clock with server/FMU timestamps, which clock skew would corrupt.
+    """
+    return int(timezone.now().timestamp() * 1000)
 
 
 @ensure_csrf_cookie

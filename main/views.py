@@ -8,7 +8,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
 from assets.models import Asset
-from assets.views import bulk_asset_status_data
+from assets.views import bulk_asset_status_data, server_now_ms
 from config.models import ServerConfig
 from fss.decorators import login_required_api
 
@@ -83,6 +83,9 @@ def all_status_data(request):
     data = {
         'currentUser': None,
         'csrfToken': get_token(request),
+        # The server's current time (epoch-ms), used by the frontend to age
+        # commands against a single server clock instead of the browser clock.
+        'server_now': server_now_ms(),
         'servers': [],
         'assets': []
     }
