@@ -26,6 +26,14 @@ except ModuleNotFoundError as exc:
     if exc.name != 'fss.local_settings':
         raise
 
+# Secure-by-default cookie posture. Site-specific settings may deliberately
+# override these for local HTTP development, but production should not depend on
+# each install having copied the latest local_settings.py template.
+globals().setdefault('SESSION_COOKIE_SECURE', True)
+globals().setdefault('CSRF_COOKIE_SECURE', True)
+globals().setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
+globals().setdefault('CSRF_COOKIE_SAMESITE', 'Lax')
+
 
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
