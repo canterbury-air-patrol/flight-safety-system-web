@@ -167,8 +167,8 @@ const Goto: React.FC<AssetProps> = ({ controller }) => {
       title={<>Send {controller.name} to:</>}
       body={
         <>
-          <input type="text" value={degreesToDM(pos.lat, true)} onChange={(e) => handlePositionChange(e, true)}></input>
-          <input type="text" value={degreesToDM(pos.lng, false)} onChange={(e) => handlePositionChange(e, false)}></input>
+          <input type="text" value={degreesToDM(pos.lat, 'lat')} onChange={(e) => handlePositionChange(e, true)}></input>
+          <input type="text" value={degreesToDM(pos.lng, 'lon')} onChange={(e) => handlePositionChange(e, false)}></input>
           <MapContainer center={pos} zoom={13} className="dialog-map">
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
@@ -503,8 +503,8 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: st
         </thead>
         <tbody>
           <tr>
-            <td>{degreesToDM(data.position.lat, true)}</td>
-            <td>{degreesToDM(data.position.lng, false)}</td>
+            <td>{degreesToDM(data.position.lat, 'lat')}</td>
+            <td>{degreesToDM(data.position.lng, 'lon')}</td>
             <td>{data.position.alt ?? 'N/A'}</td>
           </tr>
         </tbody>
@@ -567,7 +567,7 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: st
     let text = data.command.command
     if (data.command.command_code === 'GOTO') {
       if (data.command.lat && data.command.lng) {
-        text += ` ${degreesToDM(data.command.lat, true)}, ${degreesToDM(data.command.lng, false)}`
+        text += ` ${degreesToDM(data.command.lat, 'lat')}, ${degreesToDM(data.command.lng, 'lon')}`
       }
     }
     if (data.command.command_code === 'ALT') {
