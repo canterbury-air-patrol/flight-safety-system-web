@@ -1,13 +1,16 @@
 """
 Tests for the Asset API
 """
+from datetime import timedelta
+
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from assets.models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
-from assets.views import RTT_SAMPLE_LIMIT
+from assets.views import RTT_SAMPLE_LIMIT, bulk_asset_status_data
 
 
 class AssetAPITest(TestCase):
@@ -317,3 +320,30 @@ class AssetAPITest(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
         self.assertTemplateUsed(response, 'main/main.html')
+
+    def test_bulk_asset_status_data_per_asset_rtts(self):
+        """Each asset gets its own RTT aggregation; assets without RTTs omit the key."""
+        now = timezone.now()
+        multi = self.asset
+        single = Asset.objects.create(name='Single RTT Drone')
+        Asset.objects.create(name='No RTT Drone')
+
+        # Distinct timestamps so the latest sample is deterministic.
+        for offset, rtt in enumerate((10, 30, 20)):
+            AssetRTT.objects.create(asset=multi, rtt=rtt, timestamp=now + timedelta(seconds=offset))
+        AssetRTT.objects.create(asset=single, rtt=50, timestamp=now)
+
+        results = {r['asset']['name']: r for r in bulk_asset_status_data(Asset.objects.all())}
+
+        multi_rtt = results['Test Drone']['rtt']
+        self.assertEqual(multi_rtt['rtt'], 20)  # latest (largest offset)
+        self.assertEqual(multi_rtt['rtt_min'], 10)
+        self.assertEqual(multi_rtt['rtt_max'], 30)
+        self.assertEqual(multi_rtt['rtt_avg'], 20)
+
+        single_rtt = results['Single RTT Drone']['rtt']
+        self.assertEqual(single_rtt['rtt'], 50)
+        self.assertEqual(single_rtt['rtt_min'], 50)
+        self.assertEqual(single_rtt['rtt_max'], 50)
+
+        self.assertNotIn('rtt', results['No RTT Drone'])
