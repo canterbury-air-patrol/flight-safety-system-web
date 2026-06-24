@@ -130,6 +130,14 @@ class StatusAPITest(TestCase):
         self.assertEqual(len(data['assets']), 1)
         self.assertEqual(data['assets'][0]['name'], 'Test Drone')
 
+    def test_main_view(self):
+        """The landing page serves the React SPA and sets the CSRF cookie."""
+        url = reverse('main_view')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertTemplateUsed(response, 'main/main.html')
+        self.assertIn('csrftoken', response.cookies)
+
     def test_login_page_get(self):
         """Test login page GET request."""
         url = reverse('login_page')
