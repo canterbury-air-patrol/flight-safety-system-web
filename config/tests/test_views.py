@@ -49,3 +49,19 @@ class ConfigViewTest(TestCase):
         self.assertEqual(len(data['assets']), 1)
         self.assertEqual(data['assets'][0]['name'], 'Test Drone')
         self.assertEqual(data['assets'][0]['smm_name'], 'SMM Server')
+
+    def test_config_data_json_asset_without_config(self):
+        """An asset with no AssetConfig reports null SMM fields rather than erroring."""
+        unconfigured = Asset.objects.create(name='Unconfigured Drone')
+        self.client.force_login(self.user)
+        url = reverse('config_data_json')
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+
+        assets_by_name = {a['name']: a for a in data['assets']}
+        self.assertIn('Unconfigured Drone', assets_by_name)
+        entry = assets_by_name['Unconfigured Drone']
+        self.assertEqual(entry['pk'], unconfigured.pk)
+        self.assertIsNone(entry['smm_name'])
+        self.assertIsNone(entry['smm_login'])
