@@ -9,7 +9,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from assets.models import Asset
 from assets.views import bulk_asset_status_data, server_now_ms
-from config.models import ServerConfig
+from config.models import AssetConfig, ServerConfig
 from fss.decorators import login_required_api
 
 
@@ -45,8 +45,17 @@ def asset_list(request):
     """
     Return the know assets as a json array
     """
-    assets = Asset.objects.all()
-    assets_list = [{'pk': asset.pk, 'name': asset.name} for asset in assets]
+    assets = list(Asset.objects.all())
+    configs_by_asset_id = {c.asset_id: c for c in AssetConfig.objects.filter(asset__in=assets).select_related('smm')}
+    assets_list = []
+    for asset in assets:
+        config = configs_by_asset_id.get(asset.id)
+        assets_list.append({
+            'pk': asset.pk,
+            'name': asset.name,
+            'smm_name': config.smm.name if config else None,
+            'smm_login': config.smm_login if config else None,
+        })
     return JsonResponse({'assets': assets_list})
 
 

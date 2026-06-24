@@ -13,7 +13,7 @@ export const AssetListPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/config/status.json')
+    fetch('/assets.json')
       .then((r) => {
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
         return r.json()
