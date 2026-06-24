@@ -8,11 +8,13 @@ export const LoginPage: React.FC = () => {
   const hasError = searchParams.get('error') === '1'
 
   useEffect(() => {
-    // Read CSRF token from cookie. slice() (rather than split('=')) keeps any
-    // '=' that may appear within the value intact.
+    // Read CSRF token from cookie. Split on ';' and trim each segment so a
+    // missing space after the separator can't hide the cookie. slice() (rather
+    // than split('=')) keeps any '=' that may appear within the value intact.
     const prefix = 'csrftoken='
     const token = document.cookie
-      .split('; ')
+      .split(';')
+      .map((c) => c.trim())
       .find((c) => c.startsWith(prefix))
       ?.slice(prefix.length)
     setCsrfToken(token ?? '')
