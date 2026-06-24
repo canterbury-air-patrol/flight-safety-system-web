@@ -150,3 +150,9 @@ class StatusAPITest(TestCase):
         url = reverse('login_page')
         response = self.client.post(url, {'username': 'testuser', 'password': 'password'})
         self.assertRedirects(response, '/')
+
+    def test_login_page_post_missing_credentials(self):
+        """A POST with no credentials fails cleanly rather than 500ing."""
+        url = reverse('login_page')
+        response = self.client.post(url, {})
+        self.assertRedirects(response, '/login/?error=1', target_status_code=200)
