@@ -8,7 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from assets.models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetStatus
-from config.models import ServerConfig
+from config.models import AssetConfig, ServerConfig, SMMConfig
 
 
 class StatusAPITest(TestCase):
@@ -128,7 +128,22 @@ class StatusAPITest(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(len(data['assets']), 1)
-        self.assertEqual(data['assets'][0]['name'], 'Test Drone')
+        entry = data['assets'][0]
+        self.assertEqual(entry['name'], 'Test Drone')
+        # No AssetConfig for this asset, so SMM fields are null.
+        self.assertIsNone(entry['smm_name'])
+        self.assertIsNone(entry['smm_login'])
+
+    def test_asset_list_includes_smm_config(self):
+        """asset_list surfaces SMM name/login when an AssetConfig exists."""
+        smm = SMMConfig.objects.create(name='SMM Server', address='2.2.2.2', port=9090)
+        AssetConfig.objects.create(asset=self.asset, smm=smm, smm_login='operator', smm_password='secret')
+        self.client.login(username='testuser', password='password')
+        url = reverse('asset_list')
+        response = self.client.get(url)
+        entry = response.json()['assets'][0]
+        self.assertEqual(entry['smm_name'], 'SMM Server')
+        self.assertEqual(entry['smm_login'], 'operator')
 
     def test_main_view(self):
         """The landing page serves the React SPA and sets the CSRF cookie."""
