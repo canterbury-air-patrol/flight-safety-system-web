@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "frontend/main.js",
   "scripts": {
-    "check": "eslint frontend/ && prettier -c frontend/",
+    "check": "tsc --noEmit && eslint frontend/ && prettier -c frontend/",
     "build-only": "esbuild $(esbuild-config)",
     "build": "esbuild $(esbuild-config)",
     "test": "vitest run"
