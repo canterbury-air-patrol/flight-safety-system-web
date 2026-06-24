@@ -2,10 +2,11 @@
 Tests for the Asset API
 """
 from django.contrib.auth import get_user_model
+from django.contrib.gis.geos import Point
 from django.test import Client, TestCase
 from django.urls import reverse
 
-from assets.models import Asset, AssetCommand, AssetRTT
+from assets.models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
 from assets.views import RTT_SAMPLE_LIMIT
 
 
@@ -172,6 +173,28 @@ class AssetAPITest(TestCase):
         data = response.json()
         self.assertEqual(data['command']['command_code'], 'RTL')
         self.assertEqual(data['command']['command'], 'Return to Launch')
+
+    def test_asset_status_json_formatted_details(self):
+        """The response carries formatted position, battery and search data."""
+        self.client.force_login(self.user)
+        AssetPosition.objects.create(asset=self.asset, position=Point(172.0, -43.0), altitude=120)
+        AssetStatus.objects.create(asset=self.asset, bat_percent=85, bat_used_mah=500, bat_volt=11.1)
+        AssetSearchProgress.objects.create(asset=self.asset, search=7, search_progress=3, search_progress_of=10)
+        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
+        response = self.client.get(url)
+        data = response.json()
+
+        self.assertEqual(data['position']['lat'], -43.0)
+        self.assertEqual(data['position']['lng'], 172.0)
+        self.assertEqual(data['position']['alt'], 120)
+
+        self.assertEqual(data['status']['battery_percent'], 85)
+        self.assertEqual(data['status']['battery_used'], 500)
+        self.assertEqual(data['status']['battery_voltage'], 11.1)
+
+        self.assertEqual(data['search']['id'], 7)
+        self.assertEqual(data['search']['progress'], 3)
+        self.assertEqual(data['search']['total'], 10)
 
     def test_asset_status_json_ack_pending(self):
         """A dispatched-but-unacked command reports ack_state 'pending'."""
