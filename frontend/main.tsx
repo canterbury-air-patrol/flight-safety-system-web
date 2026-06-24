@@ -13,13 +13,12 @@ const root = ReactDOM.createRoot(document.getElementById('root') as HTMLElement)
 root.render(
   <Router>
     <Routes>
+      {/* React Router matches an optional trailing slash, so one route per
+          page covers both /login and /login/. */}
       <Route path="/" element={<FSSMainPage />} />
       <Route path="/login" element={<LoginPage />} />
-      <Route path="/login/" element={<LoginPage />} />
       <Route path="/config" element={<ConfigPage />} />
-      <Route path="/config/" element={<ConfigPage />} />
       <Route path="/assets" element={<AssetListPage />} />
-      <Route path="/assets/" element={<AssetListPage />} />
     </Routes>
   </Router>
 )
