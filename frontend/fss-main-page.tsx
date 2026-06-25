@@ -1,4 +1,4 @@
-import { degreesToDM, DMToDegrees } from '@canterbury-air-patrol/deg-converter'
+import { type Axis, degreesToDM, DMToDegrees } from '@canterbury-air-patrol/deg-converter'
 import { AssetState, AssetServerState, AssetController, createAssetController, mergeServerAssets } from './asset'
 import {
   ServerState,
@@ -139,12 +139,12 @@ const Goto: React.FC<AssetProps> = ({ controller }) => {
 
   const handleGoto = (onClose: () => void) => command(() => controller.Goto(position!.lat, position!.lng), onClose)
 
-  const handlePositionChange = (event: React.ChangeEvent<HTMLInputElement>, isLat: boolean) => {
+  const handlePositionChange = (event: React.ChangeEvent<HTMLInputElement>, axis: Axis) => {
     const { value } = event.target
     const positionValue = DMToDegrees(value)
     setPosition((prev) => {
       const current = prev || getDefaultPosition()
-      return { ...current, [isLat ? 'lat' : 'lng']: positionValue }
+      return { ...current, [axis === 'lat' ? 'lat' : 'lng']: positionValue }
     })
   }
 
@@ -167,8 +167,8 @@ const Goto: React.FC<AssetProps> = ({ controller }) => {
       title={<>Send {controller.name} to:</>}
       body={
         <>
-          <input type="text" value={degreesToDM(pos.lat, 'lat')} onChange={(e) => handlePositionChange(e, true)}></input>
-          <input type="text" value={degreesToDM(pos.lng, 'lon')} onChange={(e) => handlePositionChange(e, false)}></input>
+          <input type="text" value={degreesToDM(pos.lat, 'lat')} onChange={(e) => handlePositionChange(e, 'lat')}></input>
+          <input type="text" value={degreesToDM(pos.lng, 'lon')} onChange={(e) => handlePositionChange(e, 'lon')}></input>
           <MapContainer center={pos} zoom={13} className="dialog-map">
             <TileLayer
               attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
