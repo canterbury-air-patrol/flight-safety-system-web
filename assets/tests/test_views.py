@@ -92,6 +92,14 @@ class AssetAPITest(TestCase):
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.content.decode(), 'Asset already exists')
 
+    def test_asset_add_missing_name(self):
+        """Test that a POST with no asset_name is rejected with its own message."""
+        self.client.force_login(self.user)
+        url = reverse('asset_add')
+        response = self.client.post(url, {})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.content.decode(), 'Missing asset_name')
+
     def test_asset_command_set_invalid_command(self):
         """Test that an unrecognised command is rejected."""
         self.client.force_login(self.user)
