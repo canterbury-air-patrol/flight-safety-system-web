@@ -566,7 +566,7 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: st
   if (data?.command) {
     let text = data.command.command
     if (data.command.command_code === 'GOTO') {
-      if (data.command.lat && data.command.lng) {
+      if (data.command.lat != null && data.command.lng != null) {
         text += ` ${degreesToDM(data.command.lat, 'lat')}, ${degreesToDM(data.command.lng, 'lon')}`
       }
     }
