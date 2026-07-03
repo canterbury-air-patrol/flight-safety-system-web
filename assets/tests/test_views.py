@@ -116,6 +116,14 @@ class AssetAPITest(TestCase):
         response = self.client.post(url, {'command': 'ALT', 'altitude': 1001})
         self.assertEqual(response.status_code, 400)
 
+        # AssetCommand.ALTITUDE_MAX_FT is the shared ceiling with the frontend's
+        # max="999" input; 1000 must be rejected so the two layers cannot drift.
+        response = self.client.post(url, {'command': 'ALT', 'altitude': 1000})
+        self.assertEqual(response.status_code, 400)
+
+        response = self.client.post(url, {'command': 'ALT', 'altitude': 999})
+        self.assertEqual(response.status_code, 200)
+
         response = self.client.post(url, {'command': 'ALT', 'altitude': -1})
         self.assertEqual(response.status_code, 400)
 
