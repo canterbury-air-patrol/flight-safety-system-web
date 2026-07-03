@@ -9,7 +9,7 @@ export interface AssetStatusData {
   timestamp: string
   battery_percent: number
   battery_used: number
-  battery_voltage: number
+  battery_voltage: number | null
 }
 
 export interface AssetSearchData {

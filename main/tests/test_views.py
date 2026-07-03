@@ -83,6 +83,17 @@ class StatusAPITest(TestCase):
         self.assertEqual(cmd_data['command'], 'Adjust Altitude')
         self.assertEqual(cmd_data['alt'], 0)
 
+    def test_all_status_data_with_null_battery_voltage(self):
+        """A null bat_volt passes through as null rather than an ambiguous value."""
+        self.client.login(username='testuser', password='password')
+        AssetStatus.objects.create(asset=self.asset, bat_percent=85, bat_used_mah=500, bat_volt=None)
+
+        url = reverse('all_status_data')
+        response = self.client.get(url)
+        data = response.json()
+
+        self.assertIsNone(data['assets'][0]['status']['battery_voltage'])
+
     def test_current_user_unauthenticated(self):
         """Test current_user when not logged in."""
         url = reverse('current_user')
