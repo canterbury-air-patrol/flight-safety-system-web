@@ -339,7 +339,7 @@ def asset_command_set(request, asset_id):
         if command in AssetCommand.REQUIRES_ALTITUDE:
             try:
                 altitude = int(request.POST.get('altitude'))
-                if altitude < 0 or altitude > 1000:
+                if altitude < 0 or altitude > AssetCommand.ALTITUDE_MAX_FT:
                     raise ValueError
             except (ValueError, TypeError):
                 return HttpResponseBadRequest('Invalid Altitude')

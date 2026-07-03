@@ -110,6 +110,7 @@ class AssetCommand(models.Model):
     REQUIRES_POSITION = ('GOTO', )
     position = models.PointField(geography=True, null=True, blank=True)
     REQUIRES_ALTITUDE = ('ALT', )
+    ALTITUDE_MAX_FT = 999
     altitude = models.IntegerField(null=True, blank=True)
 
     # Who dispatched this command, recorded for the audit trail of a
