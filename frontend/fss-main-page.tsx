@@ -534,7 +534,7 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: st
           <tr>
             <td>{data.status.battery_percent}</td>
             <td>{data.status.battery_used}</td>
-            <td>{data.status.battery_voltage}</td>
+            <td>{data.status.battery_voltage ?? 'N/A'}</td>
           </tr>
         </tbody>
       </table>
