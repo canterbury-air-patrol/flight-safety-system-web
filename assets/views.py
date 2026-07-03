@@ -6,6 +6,7 @@ import contextlib
 
 from django.contrib.gis.geos import Point
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import IntegrityError
 from django.db.models import OuterRef, Subquery
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render
@@ -359,12 +360,16 @@ def asset_add(request):
     """
     Add an asset
     """
-    if request.method == "POST":
-        asset_name = request.POST.get('asset_name')
-        if asset_name is not None:
-            if Asset.objects.filter(name=asset_name).exists():
-                return HttpResponse("Asset already exists", status=409)
-            asset = Asset(name=asset_name)
-            asset.save()
-            return HttpResponse("Created")
-    return HttpResponseBadRequest("Only POST is supported")
+    if request.method != "POST":
+        return HttpResponseBadRequest("Only POST is supported")
+    asset_name = request.POST.get('asset_name')
+    if asset_name is None:
+        return HttpResponseBadRequest("Missing asset_name")
+    try:
+        Asset.objects.create(name=asset_name)
+    except IntegrityError:
+        # Relies on Asset.name's unique constraint rather than a racy
+        # exists()-then-save() check, so two concurrent requests for the same
+        # name both get the clean 409 instead of one raising an unhandled 500.
+        return HttpResponse("Asset already exists", status=409)
+    return HttpResponse("Created")
