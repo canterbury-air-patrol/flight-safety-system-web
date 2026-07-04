@@ -22,3 +22,37 @@ jobs:
       - name: check-code
         run: |
           ./check-code.sh
+
+  deploy-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install apt depends
+        run: |
+          sudo apt update
+          sudo apt install -y gdal-bin libgdal-dev
+
+      - name: Setup python
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.13
+      - name: Install dependencies
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+
+      # Runs manage.py check --deploy against docker/local_settings.py - the
+      # actual production settings module - rather than test_settings.py
+      # (which intentionally relaxes things) or a dev local_settings.py with
+      # DEBUG=True. Dummy DB_* values are enough: check --deploy validates
+      # settings, it never connects to the database.
+      - name: Check production-like settings
+        run: |
+          source venv/bin/activate
+          cp docker/local_settings.py fss/local_settings.py
+          export DJANGO_SECRET_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(50))')"
+          export DB_HOST=dummy DB_NAME=dummy DB_USER=dummy DB_PASS=dummy
+          export ALLOWED_HOSTS=fss.example.com
+          export CSRF_TRUSTED_ORIGINS=https://fss.example.com
+          ./manage.py check --deploy --fail-level WARNING
