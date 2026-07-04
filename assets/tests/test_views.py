@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from assets.models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
-from assets.views import RTT_SAMPLE_LIMIT, bulk_asset_status_data
+from assets.views import RTT_SAMPLE_LIMIT, RTT_SCAN_WINDOW, bulk_asset_status_data
 
 
 class AssetAPITest(TestCase):
@@ -313,6 +313,19 @@ class AssetAPITest(TestCase):
         rtt_data = data['rtt']
         self.assertEqual(rtt_data['rtt_max'], total_samples)
         self.assertEqual(rtt_data['rtt_min'], total_samples - RTT_SAMPLE_LIMIT + 1)
+
+    def test_bulk_asset_status_data_ignores_rtts_older_than_scan_window(self):
+        """RTTs older than RTT_SCAN_WINDOW are excluded from the aggregation (PERF-02)."""
+        now = timezone.now()
+        AssetRTT.objects.create(asset=self.asset, rtt=999, timestamp=now - RTT_SCAN_WINDOW - timedelta(minutes=1))
+        AssetRTT.objects.create(asset=self.asset, rtt=42, timestamp=now)
+
+        results = {r['asset']['name']: r for r in bulk_asset_status_data(Asset.objects.filter(pk=self.asset.pk))}
+
+        rtt_data = results['Test Drone']['rtt']
+        self.assertEqual(rtt_data['rtt'], 42)
+        self.assertEqual(rtt_data['rtt_min'], 42)
+        self.assertEqual(rtt_data['rtt_max'], 42)
 
     def test_asset_add_get_rejected(self):
         """Test that authenticated GET request to asset_add is rejected."""
