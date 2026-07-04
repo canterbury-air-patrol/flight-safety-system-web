@@ -6,7 +6,14 @@ on:
 
 jobs:
 
+  checkcode:
+    uses: ./.github/workflows/checkcode.yml
+
+  eslint:
+    uses: ./.github/workflows/eslint.yml
+
   build:
+    needs: [checkcode, eslint]
 
     runs-on: ubuntu-latest
 
