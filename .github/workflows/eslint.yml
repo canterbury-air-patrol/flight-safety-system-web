@@ -1,7 +1,10 @@
 name: ESLint
 
 on:
-  pull_request
+  pull_request:
+  push:
+    branches: [develop, main]
+  workflow_call:
 
 jobs:
   eslint:
