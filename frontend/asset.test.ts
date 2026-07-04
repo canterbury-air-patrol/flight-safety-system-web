@@ -143,4 +143,45 @@ describe('mergeServerAssets', () => {
 
     expect(result.Drone.servers.alpha.serverNow).toBe(1700000000000)
   })
+
+  it('drops a server entry once that server no longer reports the asset', () => {
+    const first = mergeServerAssets({}, 'alpha', [statusFor('Drone', 5)])
+    const result = mergeServerAssets(first, 'alpha', [])
+
+    expect(result.Drone).toBeUndefined()
+  })
+
+  it('prunes only the reporting server, keeping other servers intact', () => {
+    const first = mergeServerAssets({}, 'alpha', [statusFor('Drone', 5)])
+    const both = mergeServerAssets(first, 'beta', [statusFor('Drone', 9)])
+    const result = mergeServerAssets(both, 'alpha', [])
+
+    expect(Object.keys(result.Drone.servers)).toEqual(['beta'])
+  })
+
+  it('falls back to a remaining server when the pruned one was selected', () => {
+    const first = mergeServerAssets({}, 'alpha', [statusFor('Drone', 5)])
+    const both = mergeServerAssets(first, 'beta', [statusFor('Drone', 9)])
+    const result = mergeServerAssets(both, 'alpha', [])
+
+    expect(result.Drone.selectedServerName).toBe('beta')
+  })
+
+  it('does not prune a server that simply was not polled this cycle', () => {
+    // A failed/unreachable/unauthenticated poll never calls mergeServerAssets
+    // for that server at all - only a *different* server's successful poll
+    // runs here, and it must not touch entries it has no data about.
+    const first = mergeServerAssets({}, 'alpha', [statusFor('Drone', 5)])
+    const result = mergeServerAssets(first, 'beta', [])
+
+    expect(result.Drone.servers.alpha.assetPk).toBe(5)
+  })
+
+  it('leaves an asset untouched when the same server reports it again', () => {
+    const first = mergeServerAssets({}, 'alpha', [statusFor('Drone', 5)])
+    const result = mergeServerAssets(first, 'alpha', [statusFor('Drone', 5)])
+
+    expect(Object.keys(result)).toEqual(['Drone'])
+    expect(result.Drone.servers.alpha.assetPk).toBe(5)
+  })
 })

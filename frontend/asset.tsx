@@ -79,8 +79,34 @@ export const assetPositionMostRecent = (asset: AssetState): AssetPositionData | 
   return best
 }
 
-export const mergeServerAssets = (currentAssets: Record<string, AssetState>, serverName: string, assets: AssetStatus[], serverNow?: number): Record<string, AssetState> => {
+// Reconcile this server's reported assets against what it reported last poll,
+// dropping its entry from any asset it no longer reports and pruning the
+// asset entirely once that was its last server. Only call this for a
+// server's *successful* poll — a failed/unreachable/unauthenticated poll
+// should leave last-known data + age styling in place instead.
+const pruneStaleServerEntries = (currentAssets: Record<string, AssetState>, serverName: string, reportedNames: Set<string>): Record<string, AssetState> => {
   const nextAssets = { ...currentAssets }
+  for (const [assetName, assetState] of Object.entries(nextAssets)) {
+    if (reportedNames.has(assetName) || !(serverName in assetState.servers)) continue
+    const remainingServers = { ...assetState.servers }
+    delete remainingServers[serverName]
+    const remainingServerNames = Object.keys(remainingServers)
+    if (remainingServerNames.length === 0) {
+      delete nextAssets[assetName]
+    } else {
+      nextAssets[assetName] = {
+        ...assetState,
+        servers: remainingServers,
+        selectedServerName: assetState.selectedServerName === serverName ? remainingServerNames[0] : assetState.selectedServerName
+      }
+    }
+  }
+  return nextAssets
+}
+
+export const mergeServerAssets = (currentAssets: Record<string, AssetState>, serverName: string, assets: AssetStatus[], serverNow?: number): Record<string, AssetState> => {
+  const reportedNames = new Set(assets.map((assetData) => assetData.asset.name))
+  const nextAssets = pruneStaleServerEntries(currentAssets, serverName, reportedNames)
   for (const assetData of assets) {
     const assetName = assetData.asset.name
     const existing = nextAssets[assetName] ?? createAsset(assetName)
