@@ -43,6 +43,14 @@ const rttTimeOld = 60 * 1000
 // as a problem rather than transient latency.
 const commandAckTimeout = 15 * 1000
 
+// Poll cadence, and how long a single server's fetch may take before it is
+// treated as unreachable. The fetch timeout must stay comfortably below the
+// poll interval so one hung/blackholed peer resolves to "unreachable" well
+// before the next cycle starts, instead of stalling every server's data
+// behind it.
+const pollIntervalMs = 3 * 1000
+const pollFetchTimeoutMs = 2.5 * 1000
+
 L.Icon.Default.prototype.options.iconUrl = markerIcon
 L.Icon.Default.prototype.options.iconRetinaUrl = markerIcon2x
 L.Icon.Default.prototype.options.shadowUrl = markerIconShadow
@@ -710,6 +718,7 @@ export const FSSMainPage: React.FC = () => {
   knownAssetsRef.current = knownAssets
 
   const pollAbortRef = useRef<AbortController | null>(null)
+  const unmountedRef = useRef(false)
 
   const updateData = useCallback(async () => {
     pollAbortRef.current?.abort()
@@ -722,8 +731,11 @@ export const FSSMainPage: React.FC = () => {
     const results = await Promise.all(
       serverNames.map(async (serverName) => {
         const server = snapshotServers[serverName]
+        // Bound each server's fetch independently so one hung/blackholed peer
+        // can't stall the other servers' otherwise-successful data behind it.
+        const signal = AbortSignal.any([ac.signal, AbortSignal.timeout(pollFetchTimeoutMs)])
         try {
-          const response = await fetch(getServerURL(server, '/current/all.json/'), { credentials: 'include', signal: ac.signal })
+          const response = await fetch(getServerURL(server, '/current/all.json/'), { credentials: 'include', signal })
           if (response.status === 403) return { serverName, data: null, unauthenticated: true }
           if (!response.ok) throw new Error(`HTTP ${response.status}`)
           const data = await response.json()
@@ -734,7 +746,11 @@ export const FSSMainPage: React.FC = () => {
       })
     )
 
-    if (ac.signal.aborted) return
+    // A superseded cycle (aborted by a newer one starting) may still have
+    // resolved good data for some servers before being superseded; apply it
+    // rather than discarding it wholesale. Only bail if the component itself
+    // unmounted meanwhile.
+    if (unmountedRef.current) return
 
     let currentServers = { ...knownServersRef.current }
     let currentAssets = { ...knownAssetsRef.current }
@@ -757,9 +773,11 @@ export const FSSMainPage: React.FC = () => {
   }, [])
 
   useEffect(() => {
+    unmountedRef.current = false
     updateData()
-    const timer = setInterval(() => updateData(), 3000)
+    const timer = setInterval(() => updateData(), pollIntervalMs)
     return () => {
+      unmountedRef.current = true
       clearInterval(timer)
       pollAbortRef.current?.abort()
     }
