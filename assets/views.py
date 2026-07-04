@@ -3,6 +3,7 @@ Views for Assets
 """
 
 import contextlib
+from datetime import timedelta
 
 from django.contrib.gis.geos import Point
 from django.core.exceptions import ObjectDoesNotExist
@@ -18,6 +19,12 @@ from fss.decorators import login_required_api
 from .models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
 
 RTT_SAMPLE_LIMIT = 15
+
+# How far back the RTT window-function query below looks. Bounds the scan to
+# a fixed recent window instead of the fleet's entire history, while staying
+# a comfortable multiple of the reporting period so RTT_SAMPLE_LIMIT samples
+# are always found within it.
+RTT_SCAN_WINDOW = timedelta(hours=1)
 
 
 def server_now_ms():
@@ -274,16 +281,22 @@ def bulk_asset_status_data(assets):
 
     # Fetch the latest RTT_SAMPLE_LIMIT RTTs per asset in one query using a
     # window function — Django ORM can't express LIMIT-per-group without raw SQL.
+    # Bound by RTT_SCAN_WINDOW so the partition doesn't materialize over the
+    # fleet's entire RTT history on every poll; the cutoff is computed in
+    # Python (rather than a database-specific interval literal) so the query
+    # stays portable across the spatialite (tests) and PostGIS (production)
+    # backends.
     rtts_by_asset = {}
     asset_ids = [a.pk for a in annotated_assets]
     if asset_ids:
         placeholders = ','.join(['%s'] * len(asset_ids))
         table_name = AssetRTT._meta.db_table
+        scan_cutoff = timezone.now() - RTT_SCAN_WINDOW
         for rtt in AssetRTT.objects.raw(
             "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY asset_id ORDER BY timestamp DESC) AS rn "
-            f"FROM {table_name} WHERE asset_id IN ({placeholders})) t WHERE rn <= %s "
+            f"FROM {table_name} WHERE asset_id IN ({placeholders}) AND timestamp > %s) t WHERE rn <= %s "
             "ORDER BY asset_id, rn",
-            [*asset_ids, RTT_SAMPLE_LIMIT]
+            [*asset_ids, scan_cutoff, RTT_SAMPLE_LIMIT]
         ):
             rtts_by_asset.setdefault(rtt.asset_id, []).append(rtt)
 
