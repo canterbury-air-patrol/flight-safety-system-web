@@ -4,9 +4,23 @@ Requires=postgresql.service
 After=postgresql.service
 
 [Service]
+# User=cap and the /home/cap/... paths below are example-specific to this
+# deployment; adjust the user and paths for your own install location.
 User=cap
 WorkingDirectory=/home/cap/software/flight-safety-system-web
-ExecStart=/home/cap/software/flight-safety-system-web/start.sh
+# start-wsgi.sh runs the production uWSGI entrypoint. start.sh (Django's
+# runserver) is documented as unsuitable for production and must not be used
+# here - see start-wsgi.sh for why.
+ExecStart=/home/cap/software/flight-safety-system-web/start-wsgi.sh
+Restart=on-failure
+RestartSec=5
+
+# Basic hardening for a service that holds aircraft-command authority.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/cap/software/flight-safety-system-web
 
 [Install]
 WantedBy=multi-user.target
