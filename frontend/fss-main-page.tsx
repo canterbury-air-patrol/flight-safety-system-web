@@ -280,9 +280,17 @@ const FSSAssetControls: React.FC<AssetProps> = ({ controller }) => {
   )
 }
 
-const dataAgeClass = (timestamp: string, old: number, warn: number, prefix: string) => {
-  const dbTime = new Date(timestamp)
-  const timeDelta = new Date().getTime() - dbTime.getTime()
+// Age (ms) of a data point, measured against the server's clock (serverNow,
+// epoch-ms from the same poll) rather than the browser clock: a laptop that's
+// even a minute or two off (no NTP, VM drift, DST bugs) would otherwise paint
+// fresh data as stale, or worse, genuinely stale telemetry as current. Mirrors
+// commandAckAge's documented fallback to the browser clock when serverNow is
+// unavailable, so a data point still eventually ages rather than looking
+// permanently fresh.
+const dataAgeClass = (timestamp: string, old: number, warn: number, prefix: string, serverNow?: number) => {
+  const dbTime = new Date(timestamp).getTime()
+  const now = serverNow ?? Date.now()
+  const timeDelta = now - dbTime
   if (timeDelta > old) {
     return `${prefix}-old`
   } else if (timeDelta > warn) {
@@ -478,7 +486,7 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: st
   let rttTable
   if (data?.rtt) {
     rttTable = (
-      <table className={'asset-rtt-status ' + dataAgeClass(data.rtt.timestamp, rttTimeOld, rttTimeWarn, 'asset-rtt-time')}>
+      <table className={'asset-rtt-status ' + dataAgeClass(data.rtt.timestamp, rttTimeOld, rttTimeWarn, 'asset-rtt-time', server.serverNow)}>
         <thead>
           <tr>
             <td>RTT (ms)</td>
@@ -501,7 +509,7 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: st
   let posTable
   if (data?.position) {
     posTable = (
-      <table className={'asset-positon ' + dataAgeClass(data.position.timestamp, assetPositionTimeOld, assetPositionTimeWarn, 'asset-position')}>
+      <table className={'asset-positon ' + dataAgeClass(data.position.timestamp, assetPositionTimeOld, assetPositionTimeWarn, 'asset-position', server.serverNow)}>
         <thead>
           <tr>
             <td>Latitude</td>
@@ -522,7 +530,7 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: st
   let batteryTable
   if (data?.status) {
     let batteryClass = 'asset-battery-status'
-    batteryClass += dataAgeClass(data.status.timestamp, batteryTimeOld, batteryTimeWarn, ' asset-battery-time')
+    batteryClass += dataAgeClass(data.status.timestamp, batteryTimeOld, batteryTimeWarn, ' asset-battery-time', server.serverNow)
 
     if (data.status.battery_percent < batteryCritical) {
       batteryClass += ' asset-battery-critical'
@@ -551,7 +559,7 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: st
   let searchTable
   if (data?.search) {
     searchTable = (
-      <table className={'asset-search-status ' + dataAgeClass(data.search.timestamp, searchTimeOld, searchTimeWarn, 'asset-search-time')}>
+      <table className={'asset-search-status ' + dataAgeClass(data.search.timestamp, searchTimeOld, searchTimeWarn, 'asset-search-time', server.serverNow)}>
         <thead>
           <tr>
             <td>Search</td>
