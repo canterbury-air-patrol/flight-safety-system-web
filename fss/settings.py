@@ -35,6 +35,26 @@ globals().setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
 globals().setdefault('CSRF_COOKIE_SAMESITE', 'Lax')
 
 
+def merge_csrf_trusted_origins(csrf_trusted, cors_allowed):
+    """
+    Every peer trusted for cross-origin CORS reads must also be CSRF-trusted
+    for cross-origin command POSTs - in this multi-server design they are
+    exactly the same peer set. A peer listed in CORS_ALLOWED_ORIGINS but not
+    CSRF_TRUSTED_ORIGINS (as the README's multi-server example previously
+    showed) lets cross-server polling work while silently 403ing cross-server
+    commands.
+    """
+    return sorted(set(csrf_trusted) | set(cors_allowed))
+
+
+# Union CORS peers into CSRF_TRUSTED_ORIGINS here, at the framework level, so
+# the gap above can't recur regardless of which local_settings an install uses.
+CSRF_TRUSTED_ORIGINS = merge_csrf_trusted_origins(
+    globals().get('CSRF_TRUSTED_ORIGINS', []),
+    globals().get('CORS_ALLOWED_ORIGINS', [])
+)
+
+
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/3.0/howto/deployment/checklist/
 

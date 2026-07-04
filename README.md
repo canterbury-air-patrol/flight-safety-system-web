@@ -36,7 +36,12 @@ in every other peer's list.
 
 A server not listed in its peers' `CORS_ALLOWED_ORIGINS` will still receive
 and store data from aircraft, but the UI loaded from a peer will not be able
-to send authenticated commands to it.
+to poll or send authenticated commands to it.
+
+Every origin listed in `CORS_ALLOWED_ORIGINS` is automatically trusted for
+CSRF as well (`CSRF_TRUSTED_ORIGINS` is extended with it at startup), so a
+peer only needs to be listed once, here. This is what makes cross-server
+command dispatch — not just polling — work between peers.
 
 ---
 
