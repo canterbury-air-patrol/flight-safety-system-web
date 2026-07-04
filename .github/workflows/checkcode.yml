@@ -68,3 +68,52 @@ jobs:
           export ALLOWED_HOSTS=fss.example.com
           export CSRF_TRUSTED_ORIGINS=https://fss.example.com
           ./manage.py check --deploy --fail-level WARNING
+
+  postgis-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: fss_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install apt depends
+        run: |
+          sudo apt update
+          sudo apt install -y gdal-bin libgdal-dev
+
+      - name: Setup python
+        uses: actions/setup-python@v6
+        with:
+          python-version: 3.13
+      - name: Install dependencies
+        run: |
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install -r requirements.txt
+
+      # Exercises the same suite against the production engine (PostGIS)
+      # instead of the SpatiaLite default in test_settings.py - migrations run
+      # as part of the test database setup, so engine-specific migration SQL
+      # is covered too, not just query behaviour.
+      - name: Run Django tests against PostGIS
+        env:
+          DJANGO_SECRET_KEY: dummy-secret-key-for-ci-only
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: fss_test
+          DB_USER: postgres
+          DB_PASS: postgres
+        run: |
+          source venv/bin/activate
+          ./manage.py test --settings=fss.test_settings_postgis
