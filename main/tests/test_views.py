@@ -54,6 +54,26 @@ class StatusAPITest(TestCase):
         self.assertGreaterEqual(data['server_now'], before)
         self.assertLessEqual(data['server_now'], after)
 
+    def test_all_status_data_with_no_asset_data_still_has_server_now(self):
+        """
+        An asset with no position/status/search/command data yet must still
+        carry server_now, so the frontend's clock-skew-safe aging (which keys
+        entirely off this field) never silently disables itself because a
+        no-data asset happened to omit it (TEST-02).
+        """
+        self.client.login(username='testuser', password='password')
+        url = reverse('all_status_data')
+        response = self.client.get(url)
+        data = response.json()
+
+        asset_data = data['assets'][0]
+        self.assertNotIn('position', asset_data)
+        self.assertNotIn('status', asset_data)
+        self.assertNotIn('search', asset_data)
+        self.assertNotIn('command', asset_data)
+        self.assertIn('server_now', data)
+        self.assertIsInstance(data['server_now'], int)
+
     def test_all_status_data_with_details(self):
         """Test with position and status data."""
         self.client.login(username='testuser', password='password')
