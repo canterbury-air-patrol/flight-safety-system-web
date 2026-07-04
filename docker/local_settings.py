@@ -49,6 +49,17 @@ if _hsts_seconds:
     SECURE_HSTS_INCLUDE_SUBDOMAINS = os.environ.get('SECURE_HSTS_INCLUDE_SUBDOMAINS', 'true').lower() == 'true'
     SECURE_HSTS_PRELOAD = os.environ.get('SECURE_HSTS_PRELOAD', 'false').lower() == 'true'
 
+# security.W004 (HSTS) and security.W008 (SECURE_SSL_REDIRECT) are silenced
+# deliberately, not fixed: this deployment model puts a TLS-terminating
+# reverse proxy in front of uWSGI, and that proxy - not Django - is
+# responsible for enforcing HTTPS and issuing the HTTP->HTTPS redirect.
+# Django only sees plain HTTP from the proxy unless SECURE_HSTS_SECONDS is
+# opted into above (which also wires up SECURE_PROXY_SSL_HEADER). Silencing
+# just these two checks (rather than skipping `manage.py check --deploy`
+# altogether) keeps it meaningful for everything else it catches - DEBUG,
+# secret key strength, cookie flags, etc.
+SILENCED_SYSTEM_CHECKS = ['security.W004', 'security.W008']
+
 # Peer FSS server origins for cross-origin credentialed fetches.
 # Each server must appear in the other servers' lists.
 CORS_ALLOWED_ORIGINS = [
