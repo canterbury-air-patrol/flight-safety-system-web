@@ -42,6 +42,18 @@ jobs:
           source venv/bin/activate
           pip install -r requirements.txt
 
+      # STATICFILES_DIRS points at dist/, the frontend build output; a real
+      # deploy always builds it first (setup.sh, docker/start.sh), and
+      # manage.py check --deploy validates STATICFILES_DIRS regardless of
+      # whether collectstatic actually runs. Build it here too so the check
+      # sees the same production-like layout, not staticfiles.W004 noise from
+      # a directory that only doesn't exist because this job skipped the
+      # frontend build.
+      - name: Build frontend
+        run: |
+          npm ci
+          npm run build
+
       # Runs manage.py check --deploy against docker/local_settings.py - the
       # actual production settings module - rather than test_settings.py
       # (which intentionally relaxes things) or a dev local_settings.py with
