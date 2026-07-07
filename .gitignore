@@ -10,3 +10,4 @@ fss/secretkey.txt
 node_modules/
 dist/
 .vscode/
+satisfies-report.json
