@@ -10,6 +10,7 @@ from django.urls import NoReverseMatch, get_resolver, reverse
 from django.urls.resolvers import URLPattern, URLResolver
 
 from assets.models import Asset, AssetCommand
+from fss.satisfies import satisfies
 
 # Endpoints deliberately reachable without authentication: the SPA shell (its
 # auth-gated data is fetched separately via JS), the login flow itself, and
@@ -53,6 +54,7 @@ class UnauthenticatedAccessSweepTest(TestCase):
     unauthenticated request, unless explicitly allowlisted as public.
     """
 
+    @satisfies('TC-WEB-001')
     def test_unauthenticated_requests_are_rejected(self):
         """Sweep every named URL pattern this project owns for a 302/403."""
         checked = []

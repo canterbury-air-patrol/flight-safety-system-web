@@ -11,6 +11,7 @@ from django.utils import timezone
 
 from assets.models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
 from assets.views import RTT_SAMPLE_LIMIT, RTT_SCAN_WINDOW, bulk_asset_status_data
+from fss.satisfies import satisfies
 
 
 class AssetAPITest(TestCase):
@@ -46,6 +47,7 @@ class AssetAPITest(TestCase):
         self.assertEqual(cmd.command, 'RTL')
         self.assertEqual(cmd.issued_by, self.user)
 
+    @satisfies('TC-WEB-008')
     def test_asset_command_records_issuer(self):
         """The issuing user is recorded on the command and surfaced in the API."""
         self.client.force_login(self.user)
@@ -108,6 +110,7 @@ class AssetAPITest(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.content.decode(), 'Invalid command')
 
+    @satisfies('TC-WEB-012')
     def test_asset_command_set_invalid_altitude(self):
         """Test setting an invalid altitude."""
         self.client.force_login(self.user)
@@ -130,6 +133,7 @@ class AssetAPITest(TestCase):
         response = self.client.post(url, {'command': 'ALT', 'altitude': 'high'})
         self.assertEqual(response.status_code, 400)
 
+    @satisfies('TC-WEB-012')
     def test_asset_command_set_invalid_coordinates(self):
         """Test setting invalid coordinates for GOTO."""
         self.client.force_login(self.user)
@@ -143,6 +147,7 @@ class AssetAPITest(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.content.decode(), 'Invalid Lat/Long')
 
+    @satisfies('TC-WEB-012')
     def test_asset_command_set_out_of_range_coordinates(self):
         """Test that out-of-range lat/lng values are rejected."""
         self.client.force_login(self.user)
