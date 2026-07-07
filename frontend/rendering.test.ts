@@ -51,11 +51,13 @@ describe('dataAgeClass', () => {
     expect(cls).toBe('asset-position-warn')
   })
 
+  // satisfies: TC-WEB-006
   it('is old once older than the old threshold', () => {
     const cls = dataAgeClass(isoAt(assetPositionTimeOld + 1), assetPositionTimeOld, assetPositionTimeWarn, 'asset-position', SERVER_NOW)
     expect(cls).toBe('asset-position-old')
   })
 
+  // satisfies: TC-WEB-020, TC-WEB-021
   it('computes each indicator independently: stale battery does not affect a fresh position', () => {
     const positionClass = dataAgeClass(isoAt(0), assetPositionTimeOld, assetPositionTimeWarn, 'asset-position', SERVER_NOW)
     const batteryClass = dataAgeClass(isoAt(batteryTimeOld + 1), batteryTimeOld, batteryTimeWarn, 'asset-battery-time', SERVER_NOW)
