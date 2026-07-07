@@ -9,6 +9,7 @@ from django.utils import timezone
 
 from assets.models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetStatus
 from config.models import AssetConfig, ServerConfig, SMMConfig
+from fss.satisfies import satisfies
 
 
 class StatusAPITest(TestCase):
@@ -27,6 +28,7 @@ class StatusAPITest(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 403)
 
+    @satisfies('TC-WEB-005')
     def test_all_status_data_authenticated(self):
         """Test the all_status_data endpoint when logged in."""
         self.client.login(username='testuser', password='password')
@@ -151,6 +153,7 @@ class StatusAPITest(TestCase):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 403)
 
+    @satisfies('TC-WEB-002')
     def test_asset_list_authenticated(self):
         """Test asset_list returns data when logged in."""
         self.client.login(username='testuser', password='password')
