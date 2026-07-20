@@ -19,4 +19,5 @@ exec uwsgi \
     --master \
     --workers 4 \
     --threads 2 \
-    --static-map /static/=/code/static/
+    --static-map /static/=/code/static/ \
+    --die-on-term
