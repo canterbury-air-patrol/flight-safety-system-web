@@ -1,4 +1,4 @@
-import { AssetPositionData, AssetStatus, ServerState, canonicalServerOrigin, getServerURL } from './server'
+import { AssetPositionData, AssetStatus, ServerState, getServerURL } from './server'
 
 export type Command = 'GOTO' | 'ALT' | 'RTL' | 'HOLD' | 'RON' | 'DISARM' | 'TERM' | 'MAN'
 
@@ -8,7 +8,6 @@ export type CommandPayload =
   | { command: Extract<Command, 'RTL' | 'HOLD' | 'RON' | 'DISARM' | 'TERM' | 'MAN'> }
 
 export interface AssetServerState {
-  serverKey: string
   serverName: string
   assetPk: number
   data?: AssetStatus
@@ -30,18 +29,27 @@ export const createAsset = (name: string): AssetState => ({
 
 export const getAssetServerURL = (server: ServerState, assetServer: AssetServerState, path: string) => getServerURL(server, `/assets/${assetServer.assetPk}/${path}`)
 
-export const sendAssetCommand = async (knownServers: Record<string, ServerState>, asset: AssetState, data: CommandPayload) => {
-  const entries: [string, string][] = Object.entries(data).map(([k, v]) => [k, String(v)])
-  const targetsByOrigin = new Map<string, { assetServer: AssetServerState; server: ServerState }>()
-  for (const assetServer of Object.values(asset.servers)) {
-    const server = knownServers[assetServer.serverKey]
+interface AssetTarget {
+  server: ServerState
+  assetServer: AssetServerState
+}
+
+const resolveAssetTargets = (knownServers: Record<string, ServerState>, asset: AssetState): AssetTarget[] => {
+  const targetsByOrigin = new Map<string, AssetTarget>()
+  for (const [serverKey, assetServer] of Object.entries(asset.servers)) {
+    const server = knownServers[serverKey]
     if (!server) continue
-    const origin = canonicalServerOrigin(server.url)
-    if (!targetsByOrigin.has(origin)) {
-      targetsByOrigin.set(origin, { assetServer, server })
+    if (!targetsByOrigin.has(server.url)) {
+      targetsByOrigin.set(server.url, { assetServer, server })
     }
   }
-  const targets = Array.from(targetsByOrigin.values())
+
+  return Array.from(targetsByOrigin.values())
+}
+
+export const sendAssetCommand = async (knownServers: Record<string, ServerState>, asset: AssetState, data: CommandPayload) => {
+  const entries: [string, string][] = Object.entries(data).map(([k, v]) => [k, String(v)])
+  const targets = resolveAssetTargets(knownServers, asset)
   const results = await Promise.allSettled(
     targets.map(({ assetServer, server }) => {
       return fetch(getAssetServerURL(server, assetServer, 'command/set/'), {
@@ -125,7 +133,6 @@ export const mergeServerAssets = (
     const assetName = assetData.asset.name
     const existing = nextAssets[assetName] ?? createAsset(assetName)
     const assetServer: AssetServerState = {
-      serverKey,
       serverName,
       assetPk: assetData.asset.pk,
       data: assetData,

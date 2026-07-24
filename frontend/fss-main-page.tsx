@@ -443,15 +443,15 @@ const FSSAssetStatus: React.FC<FSSAssetStatusProps> = ({ asset, setSelected }) =
     setSelected(asset.name, e.currentTarget.name)
   }
 
-  const assetServers = Object.values(asset.servers).filter((s) => s.data)
+  const assetServers = Object.entries(asset.servers).filter(([, server]) => server.data)
 
   return (
     <div className="container card">
       <FSSAssetCommandMisalignment asset={asset} />
       <ul className="nav nav-tabs server-tab-btn">
-        {assetServers.map((server) => (
-          <li className="nav-item" key={server.serverKey}>
-            <button data-toggle="tab" className="nav-link server-tab-btn" name={server.serverKey} onClick={selectServer}>
+        {assetServers.map(([serverKey, server]) => (
+          <li className="nav-item" key={serverKey}>
+            <button data-toggle="tab" className="nav-link server-tab-btn" name={serverKey} onClick={selectServer}>
               {server.serverName}
             </button>
           </li>
