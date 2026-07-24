@@ -11,7 +11,7 @@ const makeServer = (name: string, csrfToken = 'tok', url = `https://${name}.exam
 
 const makeAsset = (name: string, servers: Array<{ serverKey: string; serverName?: string; assetPk: number }>): AssetState => ({
   name,
-  servers: Object.fromEntries(servers.map((s) => [s.serverKey, { serverKey: s.serverKey, serverName: s.serverName ?? s.serverKey, assetPk: s.assetPk }]))
+  servers: Object.fromEntries(servers.map((s) => [s.serverKey, { serverName: s.serverName ?? s.serverKey, assetPk: s.assetPk }]))
 })
 
 const statusFor = (name: string, pk: number): AssetStatus => ({ asset: { name, pk } })

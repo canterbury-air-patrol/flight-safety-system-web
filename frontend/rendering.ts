@@ -169,11 +169,11 @@ export interface ServerCommandView {
 // there is nothing to disagree about.
 export const assetServerMisalignment = (asset: AssetState): { disagree: boolean; servers: ServerCommandView[] } => {
   const servers: ServerCommandView[] = []
-  for (const assetServer of Object.values(asset.servers)) {
+  for (const [serverKey, assetServer] of Object.entries(asset.servers)) {
     const command = assetServer.data?.command
     if (!command) continue
     servers.push({
-      serverKey: assetServer.serverKey,
+      serverKey,
       serverName: assetServer.serverName,
       commandCode: command.command_code,
       ack: commandAckDisplay(command, assetServer.serverNow),

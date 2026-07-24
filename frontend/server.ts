@@ -144,7 +144,7 @@ export const mergeServerPollResult = (currentServers: Record<string, ServerState
   const nextServers = { ...currentServers, [serverKey]: updateServerData(currentServers[serverKey], data) }
   for (const s of data.servers) {
     const advertised = createServer(s.name, s.address, s.client_port, s.url)
-    const advertisedKey = canonicalServerOrigin(advertised.url)
+    const advertisedKey = advertised.url
     const existing = nextServers[advertisedKey]
     // Refresh advertised metadata without replacing live poll state. This also
     // gives the synthetic local "direct" entry its configured display name
