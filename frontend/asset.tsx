@@ -1,4 +1,4 @@
-import { AssetPositionData, AssetStatus, ServerState, getServerURL } from './server'
+import { AssetPositionData, AssetStatus, ServerState, canonicalServerOrigin, getServerURL } from './server'
 
 export type Command = 'GOTO' | 'ALT' | 'RTL' | 'HOLD' | 'RON' | 'DISARM' | 'TERM' | 'MAN'
 
@@ -8,6 +8,7 @@ export type CommandPayload =
   | { command: Extract<Command, 'RTL' | 'HOLD' | 'RON' | 'DISARM' | 'TERM' | 'MAN'> }
 
 export interface AssetServerState {
+  serverKey: string
   serverName: string
   assetPk: number
   data?: AssetStatus
@@ -18,7 +19,7 @@ export interface AssetServerState {
 
 export interface AssetState {
   name: string
-  selectedServerName?: string
+  selectedServerKey?: string
   servers: Record<string, AssetServerState>
 }
 
@@ -31,11 +32,18 @@ export const getAssetServerURL = (server: ServerState, assetServer: AssetServerS
 
 export const sendAssetCommand = async (knownServers: Record<string, ServerState>, asset: AssetState, data: CommandPayload) => {
   const entries: [string, string][] = Object.entries(data).map(([k, v]) => [k, String(v)])
-  const assetServers = Object.values(asset.servers)
+  const targetsByOrigin = new Map<string, { assetServer: AssetServerState; server: ServerState }>()
+  for (const assetServer of Object.values(asset.servers)) {
+    const server = knownServers[assetServer.serverKey]
+    if (!server) continue
+    const origin = canonicalServerOrigin(server.url)
+    if (!targetsByOrigin.has(origin)) {
+      targetsByOrigin.set(origin, { assetServer, server })
+    }
+  }
+  const targets = Array.from(targetsByOrigin.values())
   const results = await Promise.allSettled(
-    assetServers.map((assetServer) => {
-      const server = knownServers[assetServer.serverName]
-      if (!server) return Promise.resolve()
+    targets.map(({ assetServer, server }) => {
       return fetch(getAssetServerURL(server, assetServer, 'command/set/'), {
         method: 'POST',
         credentials: 'include',
@@ -51,7 +59,7 @@ export const sendAssetCommand = async (knownServers: Record<string, ServerState>
     })
   )
 
-  const failures = results.map((result, i) => ({ result, serverName: assetServers[i].serverName })).filter(({ result }) => result.status === 'rejected')
+  const failures = results.map((result, i) => ({ result, serverName: targets[i].assetServer.serverName })).filter(({ result }) => result.status === 'rejected')
 
   if (failures.length > 0) {
     const failureMessages = failures
@@ -61,8 +69,8 @@ export const sendAssetCommand = async (knownServers: Record<string, ServerState>
         return `${serverName}: ${msg}`
       })
       .join(', ')
-    const successCount = assetServers.length - failures.length
-    const prefix = successCount > 0 ? `Command was queued on ${successCount} of ${assetServers.length} server(s) — aircraft may already be affected. ` : ''
+    const successCount = targets.length - failures.length
+    const prefix = successCount > 0 ? `Command was queued on ${successCount} of ${targets.length} server(s) — aircraft may already be affected. ` : ''
     throw new Error(`${prefix}Failed on: ${failureMessages}`)
   }
 }
@@ -84,33 +92,40 @@ export const assetPositionMostRecent = (asset: AssetState): AssetPositionData | 
 // asset entirely once that was its last server. Only call this for a
 // server's *successful* poll — a failed/unreachable/unauthenticated poll
 // should leave last-known data + age styling in place instead.
-const pruneStaleServerEntries = (currentAssets: Record<string, AssetState>, serverName: string, reportedNames: Set<string>): Record<string, AssetState> => {
+const pruneStaleServerEntries = (currentAssets: Record<string, AssetState>, serverKey: string, reportedNames: Set<string>): Record<string, AssetState> => {
   const nextAssets = { ...currentAssets }
   for (const [assetName, assetState] of Object.entries(nextAssets)) {
-    if (reportedNames.has(assetName) || !(serverName in assetState.servers)) continue
+    if (reportedNames.has(assetName) || !(serverKey in assetState.servers)) continue
     const remainingServers = { ...assetState.servers }
-    delete remainingServers[serverName]
-    const remainingServerNames = Object.keys(remainingServers)
-    if (remainingServerNames.length === 0) {
+    delete remainingServers[serverKey]
+    const remainingServerKeys = Object.keys(remainingServers)
+    if (remainingServerKeys.length === 0) {
       delete nextAssets[assetName]
     } else {
       nextAssets[assetName] = {
         ...assetState,
         servers: remainingServers,
-        selectedServerName: assetState.selectedServerName === serverName ? remainingServerNames[0] : assetState.selectedServerName
+        selectedServerKey: assetState.selectedServerKey === serverKey ? remainingServerKeys[0] : assetState.selectedServerKey
       }
     }
   }
   return nextAssets
 }
 
-export const mergeServerAssets = (currentAssets: Record<string, AssetState>, serverName: string, assets: AssetStatus[], serverNow?: number): Record<string, AssetState> => {
+export const mergeServerAssets = (
+  currentAssets: Record<string, AssetState>,
+  serverKey: string,
+  serverName: string,
+  assets: AssetStatus[],
+  serverNow?: number
+): Record<string, AssetState> => {
   const reportedNames = new Set(assets.map((assetData) => assetData.asset.name))
-  const nextAssets = pruneStaleServerEntries(currentAssets, serverName, reportedNames)
+  const nextAssets = pruneStaleServerEntries(currentAssets, serverKey, reportedNames)
   for (const assetData of assets) {
     const assetName = assetData.asset.name
     const existing = nextAssets[assetName] ?? createAsset(assetName)
     const assetServer: AssetServerState = {
+      serverKey,
       serverName,
       assetPk: assetData.asset.pk,
       data: assetData,
@@ -118,8 +133,8 @@ export const mergeServerAssets = (currentAssets: Record<string, AssetState>, ser
     }
     nextAssets[assetName] = {
       ...existing,
-      servers: { ...existing.servers, [serverName]: assetServer },
-      selectedServerName: existing.selectedServerName ?? serverName
+      servers: { ...existing.servers, [serverKey]: assetServer },
+      selectedServerKey: existing.selectedServerKey ?? serverKey
     }
   }
   return nextAssets
