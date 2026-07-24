@@ -94,11 +94,17 @@ export interface ServerState {
   servers: Array<ServerDetails>
 }
 
+// Server names are operator-assigned display labels and are not guaranteed to
+// be unique across a fleet. The management origin is the stable identity used
+// by the frontend, with URL normalisation collapsing aliases such as
+// https://fss1.example:443/ and https://fss1.example.
+export const canonicalServerOrigin = (url: string): string => new URL(url).origin
+
 export const createServer = (name: string, address: string, clientPort: number, url: string): ServerState => ({
   name,
   address,
   clientPort,
-  url,
+  url: canonicalServerOrigin(url),
   connected: false,
   status: 'Connecting ...',
   assets: [],
@@ -134,12 +140,16 @@ export const serverUnauthenticated = (server: ServerState): ServerState => ({
   servers: []
 })
 
-export const mergeServerPollResult = (currentServers: Record<string, ServerState>, serverName: string, data: StatusData): Record<string, ServerState> => {
-  const nextServers = { ...currentServers, [serverName]: updateServerData(currentServers[serverName], data) }
+export const mergeServerPollResult = (currentServers: Record<string, ServerState>, serverKey: string, data: StatusData): Record<string, ServerState> => {
+  const nextServers = { ...currentServers, [serverKey]: updateServerData(currentServers[serverKey], data) }
   for (const s of data.servers) {
-    if (!nextServers[s.name]) {
-      nextServers[s.name] = createServer(s.name, s.address, s.client_port, s.url)
-    }
+    const advertised = createServer(s.name, s.address, s.client_port, s.url)
+    const advertisedKey = canonicalServerOrigin(advertised.url)
+    const existing = nextServers[advertisedKey]
+    // Refresh advertised metadata without replacing live poll state. This also
+    // gives the synthetic local "direct" entry its configured display name
+    // once a peer advertises the same origin.
+    nextServers[advertisedKey] = existing ? { ...existing, name: advertised.name, address: advertised.address, clientPort: advertised.clientPort, url: advertised.url } : advertised
   }
   return nextServers
 }

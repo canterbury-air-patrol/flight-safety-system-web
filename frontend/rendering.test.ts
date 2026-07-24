@@ -29,6 +29,7 @@ const makeCommand = (overrides: Partial<AssetCommandData> = {}): AssetCommandDat
 })
 
 const makeAssetServer = (serverName: string, command: AssetCommandData, serverNow = SERVER_NOW): AssetServerState => ({
+  serverKey: `https://${serverName}.example`,
   serverName,
   assetPk: 1,
   data: { asset: { name: 'Drone', pk: 1 }, command },
@@ -37,7 +38,7 @@ const makeAssetServer = (serverName: string, command: AssetCommandData, serverNo
 
 const makeAsset = (servers: AssetServerState[]): AssetState => ({
   name: 'Drone',
-  servers: Object.fromEntries(servers.map((s) => [s.serverName, s]))
+  servers: Object.fromEntries(servers.map((s) => [s.serverKey, s]))
 })
 
 describe('dataAgeClass', () => {
@@ -212,7 +213,13 @@ describe('assetServerMisalignment', () => {
 
   it('ignores servers with no command data at all', () => {
     const withCommand = makeAssetServer('alpha', makeCommand({ command_code: 'RTL' }))
-    const withoutCommand: AssetServerState = { serverName: 'beta', assetPk: 1, data: { asset: { name: 'Drone', pk: 1 } }, serverNow: SERVER_NOW }
+    const withoutCommand: AssetServerState = {
+      serverKey: 'https://beta.example',
+      serverName: 'beta',
+      assetPk: 1,
+      data: { asset: { name: 'Drone', pk: 1 } },
+      serverNow: SERVER_NOW
+    }
     const asset = makeAsset([withCommand, withoutCommand])
 
     const result = assetServerMisalignment(asset)

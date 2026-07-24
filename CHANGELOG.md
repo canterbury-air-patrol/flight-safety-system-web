@@ -28,6 +28,7 @@ First production release.
 
 ### Bug Fixes
 
+- Server state and command dispatch targets are keyed by canonical URL origin rather than operator-assigned server names, preventing the local `direct` alias from causing duplicate polls and commands.
 - Command status comparisons in the frontend now use the raw command code (`'GOTO'`, `'ALT'`, `'MAN'`) returned as `command_code` in the API response, rather than the Django display string (`'Goto Position'` etc.) which could silently break if wording changed.
 - Poll requests are now cancelled with `AbortController` before the next poll fires, preventing stale responses from overwriting state when a server is slow.
 - `window.location.origin` used for the direct server URL instead of the fragile `href.slice(0, -1)`.

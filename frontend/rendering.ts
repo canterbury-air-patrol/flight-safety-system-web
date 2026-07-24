@@ -152,6 +152,7 @@ export const commandAckOutcome = (command: AssetCommandData, serverNow?: number)
 
 // Per-server view of an asset's command, for the misalignment indicator.
 export interface ServerCommandView {
+  serverKey: string
   serverName: string
   commandCode?: string
   ack: { text: string; className: string }
@@ -172,6 +173,7 @@ export const assetServerMisalignment = (asset: AssetState): { disagree: boolean;
     const command = assetServer.data?.command
     if (!command) continue
     servers.push({
+      serverKey: assetServer.serverKey,
       serverName: assetServer.serverName,
       commandCode: command.command_code,
       ack: commandAckDisplay(command, assetServer.serverNow),

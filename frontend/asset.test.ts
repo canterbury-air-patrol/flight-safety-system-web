@@ -4,14 +4,14 @@ import { AssetState, createAsset, mergeServerAssets, sendAssetCommand } from './
 import { ServerState, createServer } from './server'
 import { AssetStatus } from './server'
 
-const makeServer = (name: string, csrfToken = 'tok'): ServerState => ({
-  ...createServer(name, '10.0.0.1', 8080, `https://${name}.example`),
+const makeServer = (name: string, csrfToken = 'tok', url = `https://${name}.example`): ServerState => ({
+  ...createServer(name, '10.0.0.1', 8080, url),
   csrfToken
 })
 
-const makeAsset = (name: string, servers: Array<{ serverName: string; assetPk: number }>): AssetState => ({
+const makeAsset = (name: string, servers: Array<{ serverKey: string; serverName?: string; assetPk: number }>): AssetState => ({
   name,
-  servers: Object.fromEntries(servers.map((s) => [s.serverName, { serverName: s.serverName, assetPk: s.assetPk }]))
+  servers: Object.fromEntries(servers.map((s) => [s.serverKey, { serverKey: s.serverKey, serverName: s.serverName ?? s.serverKey, assetPk: s.assetPk }]))
 })
 
 const statusFor = (name: string, pk: number): AssetStatus => ({ asset: { name, pk } })
@@ -26,7 +26,7 @@ describe('sendAssetCommand', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const servers = { alpha: makeServer('alpha', 'csrf-123') }
-    const asset = makeAsset('Drone', [{ serverName: 'alpha', assetPk: 42 }])
+    const asset = makeAsset('Drone', [{ serverKey: 'alpha', assetPk: 42 }])
 
     await sendAssetCommand(servers, asset, { command: 'RTL' })
 
@@ -45,7 +45,7 @@ describe('sendAssetCommand', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const servers = { alpha: makeServer('alpha') }
-    const asset = makeAsset('Drone', [{ serverName: 'alpha', assetPk: 7 }])
+    const asset = makeAsset('Drone', [{ serverKey: 'alpha', assetPk: 7 }])
 
     await sendAssetCommand(servers, asset, { command: 'GOTO', latitude: -43.5, longitude: 172.6 })
 
@@ -61,8 +61,8 @@ describe('sendAssetCommand', () => {
 
     const servers = { alpha: makeServer('alpha'), beta: makeServer('beta') }
     const asset = makeAsset('Drone', [
-      { serverName: 'alpha', assetPk: 1 },
-      { serverName: 'beta', assetPk: 2 }
+      { serverKey: 'alpha', assetPk: 1 },
+      { serverKey: 'beta', assetPk: 2 }
     ])
 
     await sendAssetCommand(servers, asset, { command: 'HOLD' })
@@ -79,8 +79,8 @@ describe('sendAssetCommand', () => {
 
     const servers = { alpha: makeServer('alpha') }
     const asset = makeAsset('Drone', [
-      { serverName: 'alpha', assetPk: 1 },
-      { serverName: 'ghost', assetPk: 2 }
+      { serverKey: 'alpha', assetPk: 1 },
+      { serverKey: 'ghost', assetPk: 2 }
     ])
 
     await sendAssetCommand(servers, asset, { command: 'RTL' })
@@ -95,8 +95,8 @@ describe('sendAssetCommand', () => {
 
     const servers = { alpha: makeServer('alpha'), beta: makeServer('beta') }
     const asset = makeAsset('Drone', [
-      { serverName: 'alpha', assetPk: 1 },
-      { serverName: 'beta', assetPk: 2 }
+      { serverKey: 'alpha', assetPk: 1 },
+      { serverKey: 'beta', assetPk: 2 }
     ])
 
     await expect(sendAssetCommand(servers, asset, { command: 'RTL' })).rejects.toThrow(/queued on 1 of 2 server\(s\).*beta: 500 Server Error/s)
@@ -107,81 +107,101 @@ describe('sendAssetCommand', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const servers = { alpha: makeServer('alpha') }
-    const asset = makeAsset('Drone', [{ serverName: 'alpha', assetPk: 1 }])
+    const asset = makeAsset('Drone', [{ serverKey: 'alpha', assetPk: 1 }])
 
     await expect(sendAssetCommand(servers, asset, { command: 'RTL' })).rejects.toThrow(/not authenticated/)
+  })
+
+  it('dispatches only once when legacy aliases point at the same origin', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const origin = 'https://fss1.example'
+    const servers = {
+      direct: makeServer('direct', 'tok', origin),
+      fss1: makeServer('fss1', 'tok', `${origin}:443/`)
+    }
+    const asset = makeAsset('Drone', [
+      { serverKey: 'direct', assetPk: 1 },
+      { serverKey: 'fss1', assetPk: 1 }
+    ])
+
+    await sendAssetCommand(servers, asset, { command: 'RTL' })
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 })
 
 describe('mergeServerAssets', () => {
   it('adds a previously-unseen asset keyed by name', () => {
-    const result = mergeServerAssets({}, 'alpha', [statusFor('Drone', 5)])
+    const result = mergeServerAssets({}, 'alpha-origin', 'alpha', [statusFor('Drone', 5)])
 
     expect(Object.keys(result)).toEqual(['Drone'])
-    expect(result.Drone.servers.alpha.assetPk).toBe(5)
-    expect(result.Drone.selectedServerName).toBe('alpha')
+    expect(result.Drone.servers['alpha-origin'].assetPk).toBe(5)
+    expect(result.Drone.servers['alpha-origin'].serverName).toBe('alpha')
+    expect(result.Drone.selectedServerKey).toBe('alpha-origin')
   })
 
   it('merges a second server into an existing asset without dropping the first', () => {
-    const first = mergeServerAssets({}, 'alpha', [statusFor('Drone', 5)])
-    const result = mergeServerAssets(first, 'beta', [statusFor('Drone', 9)])
+    const first = mergeServerAssets({}, 'alpha-origin', 'alpha', [statusFor('Drone', 5)])
+    const result = mergeServerAssets(first, 'beta-origin', 'beta', [statusFor('Drone', 9)])
 
-    expect(Object.keys(result.Drone.servers).sort()).toEqual(['alpha', 'beta'])
-    expect(result.Drone.servers.alpha.assetPk).toBe(5)
-    expect(result.Drone.servers.beta.assetPk).toBe(9)
+    expect(Object.keys(result.Drone.servers).sort()).toEqual(['alpha-origin', 'beta-origin'])
+    expect(result.Drone.servers['alpha-origin'].assetPk).toBe(5)
+    expect(result.Drone.servers['beta-origin'].assetPk).toBe(9)
   })
 
   it('keeps an already-selected server when merging more data', () => {
-    const existing = { Drone: { ...createAsset('Drone'), selectedServerName: 'beta' } }
-    const result = mergeServerAssets(existing, 'alpha', [statusFor('Drone', 5)])
+    const existing = { Drone: { ...createAsset('Drone'), selectedServerKey: 'beta-origin' } }
+    const result = mergeServerAssets(existing, 'alpha-origin', 'alpha', [statusFor('Drone', 5)])
 
-    expect(result.Drone.selectedServerName).toBe('beta')
+    expect(result.Drone.selectedServerKey).toBe('beta-origin')
   })
 
   it('records the server clock alongside the merged data', () => {
-    const result = mergeServerAssets({}, 'alpha', [statusFor('Drone', 5)], 1700000000000)
+    const result = mergeServerAssets({}, 'alpha-origin', 'alpha', [statusFor('Drone', 5)], 1700000000000)
 
-    expect(result.Drone.servers.alpha.serverNow).toBe(1700000000000)
+    expect(result.Drone.servers['alpha-origin'].serverNow).toBe(1700000000000)
   })
 
   it('drops a server entry once that server no longer reports the asset', () => {
-    const first = mergeServerAssets({}, 'alpha', [statusFor('Drone', 5)])
-    const result = mergeServerAssets(first, 'alpha', [])
+    const first = mergeServerAssets({}, 'alpha-origin', 'alpha', [statusFor('Drone', 5)])
+    const result = mergeServerAssets(first, 'alpha-origin', 'alpha', [])
 
     expect(result.Drone).toBeUndefined()
   })
 
   it('prunes only the reporting server, keeping other servers intact', () => {
-    const first = mergeServerAssets({}, 'alpha', [statusFor('Drone', 5)])
-    const both = mergeServerAssets(first, 'beta', [statusFor('Drone', 9)])
-    const result = mergeServerAssets(both, 'alpha', [])
+    const first = mergeServerAssets({}, 'alpha-origin', 'alpha', [statusFor('Drone', 5)])
+    const both = mergeServerAssets(first, 'beta-origin', 'beta', [statusFor('Drone', 9)])
+    const result = mergeServerAssets(both, 'alpha-origin', 'alpha', [])
 
-    expect(Object.keys(result.Drone.servers)).toEqual(['beta'])
+    expect(Object.keys(result.Drone.servers)).toEqual(['beta-origin'])
   })
 
   it('falls back to a remaining server when the pruned one was selected', () => {
-    const first = mergeServerAssets({}, 'alpha', [statusFor('Drone', 5)])
-    const both = mergeServerAssets(first, 'beta', [statusFor('Drone', 9)])
-    const result = mergeServerAssets(both, 'alpha', [])
+    const first = mergeServerAssets({}, 'alpha-origin', 'alpha', [statusFor('Drone', 5)])
+    const both = mergeServerAssets(first, 'beta-origin', 'beta', [statusFor('Drone', 9)])
+    const result = mergeServerAssets(both, 'alpha-origin', 'alpha', [])
 
-    expect(result.Drone.selectedServerName).toBe('beta')
+    expect(result.Drone.selectedServerKey).toBe('beta-origin')
   })
 
   it('does not prune a server that simply was not polled this cycle', () => {
     // A failed/unreachable/unauthenticated poll never calls mergeServerAssets
     // for that server at all - only a *different* server's successful poll
     // runs here, and it must not touch entries it has no data about.
-    const first = mergeServerAssets({}, 'alpha', [statusFor('Drone', 5)])
-    const result = mergeServerAssets(first, 'beta', [])
+    const first = mergeServerAssets({}, 'alpha-origin', 'alpha', [statusFor('Drone', 5)])
+    const result = mergeServerAssets(first, 'beta-origin', 'beta', [])
 
-    expect(result.Drone.servers.alpha.assetPk).toBe(5)
+    expect(result.Drone.servers['alpha-origin'].assetPk).toBe(5)
   })
 
   it('leaves an asset untouched when the same server reports it again', () => {
-    const first = mergeServerAssets({}, 'alpha', [statusFor('Drone', 5)])
-    const result = mergeServerAssets(first, 'alpha', [statusFor('Drone', 5)])
+    const first = mergeServerAssets({}, 'alpha-origin', 'alpha', [statusFor('Drone', 5)])
+    const result = mergeServerAssets(first, 'alpha-origin', 'alpha', [statusFor('Drone', 5)])
 
     expect(Object.keys(result)).toEqual(['Drone'])
-    expect(result.Drone.servers.alpha.assetPk).toBe(5)
+    expect(result.Drone.servers['alpha-origin'].assetPk).toBe(5)
   })
 })

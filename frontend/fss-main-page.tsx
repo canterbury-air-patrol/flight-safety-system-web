@@ -1,6 +1,6 @@
 import { type Axis, degreesToDM, DMToDegrees } from '@canterbury-air-patrol/deg-converter'
 import { AssetState, AssetServerState, AssetController, createAssetController, mergeServerAssets } from './asset'
-import { ServerState, createServer, getServerURL, serverConnectFailed, serverUnauthenticated, AssetPositionData, mergeServerPollResult } from './server'
+import { ServerState, canonicalServerOrigin, createServer, getServerURL, serverConnectFailed, serverUnauthenticated, AssetPositionData, mergeServerPollResult } from './server'
 import {
   assetPositionTimeWarn,
   assetPositionTimeOld,
@@ -293,7 +293,7 @@ const FSSAssetCommandMisalignment: React.FC<{ asset: AssetState }> = ({ asset })
           </thead>
           <tbody>
             {servers.map((s) => (
-              <tr key={s.serverName}>
+              <tr key={s.serverKey}>
                 <td>{s.serverName}</td>
                 <td>{s.commandCode ?? '—'}</td>
                 <td className={s.ack.className}>{s.ack.text}</td>
@@ -450,16 +450,16 @@ const FSSAssetStatus: React.FC<FSSAssetStatusProps> = ({ asset, setSelected }) =
       <FSSAssetCommandMisalignment asset={asset} />
       <ul className="nav nav-tabs server-tab-btn">
         {assetServers.map((server) => (
-          <li className="nav-item" key={server.serverName}>
-            <button data-toggle="tab" className="nav-link server-tab-btn" name={server.serverName} onClick={selectServer}>
+          <li className="nav-item" key={server.serverKey}>
+            <button data-toggle="tab" className="nav-link server-tab-btn" name={server.serverKey} onClick={selectServer}>
               {server.serverName}
             </button>
           </li>
         ))}
       </ul>
       <div className="asset-status">
-        {asset.selectedServerName && asset.servers[asset.selectedServerName] && (
-          <FSSAssetServerStatus server={asset.servers[asset.selectedServerName]} serverLabel={asset.selectedServerName} />
+        {asset.selectedServerKey && asset.servers[asset.selectedServerKey] && (
+          <FSSAssetServerStatus server={asset.servers[asset.selectedServerKey]} serverLabel={asset.servers[asset.selectedServerKey].serverName} />
         )}
       </div>
     </div>
@@ -531,7 +531,7 @@ function FSSServerBar(props: FSSServerBarProps) {
   return (
     <div className="bar-server">
       {knownServers.map((server) => (
-        <FSSServer key={server.name} server={server} />
+        <FSSServer key={server.url} server={server} />
       ))}
     </div>
   )
@@ -539,7 +539,7 @@ function FSSServerBar(props: FSSServerBarProps) {
 
 export const FSSMainPage: React.FC = () => {
   const [knownServers, setKnownServers] = useState<Record<string, ServerState>>({
-    direct: createServer('direct', '127.0.0.1', 0, window.location.origin)
+    [canonicalServerOrigin(window.location.origin)]: createServer('direct', '127.0.0.1', 0, window.location.origin)
   })
   const [knownAssets, setKnownAssets] = useState<Record<string, AssetState>>({})
   const [lastError, setLastError] = useState<string | null>(null)
@@ -559,22 +559,22 @@ export const FSSMainPage: React.FC = () => {
     pollAbortRef.current = ac
 
     const snapshotServers = knownServersRef.current
-    const serverNames = Object.keys(snapshotServers)
+    const serverKeys = Object.keys(snapshotServers)
 
     const results = await Promise.all(
-      serverNames.map(async (serverName) => {
-        const server = snapshotServers[serverName]
+      serverKeys.map(async (serverKey) => {
+        const server = snapshotServers[serverKey]
         // Bound each server's fetch independently so one hung/blackholed peer
         // can't stall the other servers' otherwise-successful data behind it.
         const signal = AbortSignal.any([ac.signal, AbortSignal.timeout(pollFetchTimeoutMs)])
         try {
           const response = await fetch(getServerURL(server, '/current/all.json/'), { credentials: 'include', signal })
-          if (response.status === 403) return { serverName, data: null, unauthenticated: true }
+          if (response.status === 403) return { serverKey, data: null, unauthenticated: true }
           if (!response.ok) throw new Error(`HTTP ${response.status}`)
           const data = await response.json()
-          return { serverName, data, unauthenticated: false }
+          return { serverKey, data, unauthenticated: false }
         } catch {
-          return { serverName, data: null, unauthenticated: false }
+          return { serverKey, data: null, unauthenticated: false }
         }
       })
     )
@@ -588,16 +588,21 @@ export const FSSMainPage: React.FC = () => {
     let currentServers = { ...knownServersRef.current }
     let currentAssets = { ...knownAssetsRef.current }
 
-    for (const { serverName, data, unauthenticated } of results) {
+    for (const { serverKey, data, unauthenticated } of results) {
       if (data === null) {
         if (unauthenticated) {
-          currentServers = { ...currentServers, [serverName]: serverUnauthenticated(currentServers[serverName]) }
+          currentServers = { ...currentServers, [serverKey]: serverUnauthenticated(currentServers[serverKey]) }
         } else {
-          currentServers = { ...currentServers, [serverName]: serverConnectFailed(currentServers[serverName]) }
+          currentServers = { ...currentServers, [serverKey]: serverConnectFailed(currentServers[serverKey]) }
         }
       } else {
-        currentServers = mergeServerPollResult(currentServers, serverName, data)
-        currentAssets = mergeServerAssets(currentAssets, serverName, data.assets, data.server_now)
+        currentServers = mergeServerPollResult(currentServers, serverKey, data)
+      }
+    }
+
+    for (const { serverKey, data } of results) {
+      if (data !== null) {
+        currentAssets = mergeServerAssets(currentAssets, serverKey, currentServers[serverKey].name, data.assets, data.server_now)
       }
     }
 
@@ -616,7 +621,7 @@ export const FSSMainPage: React.FC = () => {
     }
   }, [updateData])
 
-  const setAssetSelectedServer = (assetName: string, serverName: string) => {
+  const setAssetSelectedServer = (assetName: string, serverKey: string) => {
     setKnownAssets((prev) => {
       const asset = prev[assetName]
       if (!asset) return prev
@@ -624,7 +629,7 @@ export const FSSMainPage: React.FC = () => {
         ...prev,
         [assetName]: {
           ...asset,
-          selectedServerName: serverName
+          selectedServerKey: serverKey
         }
       }
     })
