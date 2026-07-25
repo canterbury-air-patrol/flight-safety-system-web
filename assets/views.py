@@ -6,8 +6,8 @@ import contextlib
 from datetime import timedelta
 
 from django.contrib.gis.geos import Point
-from django.core.exceptions import ObjectDoesNotExist
-from django.db import IntegrityError
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.db import IntegrityError, transaction
 from django.db.models import OuterRef, Subquery
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
 from django.shortcuts import get_object_or_404, render
@@ -353,6 +353,28 @@ def asset_command_confirm(request, asset_id):
     })
 
 
+def _queue_destructive_command(asset_command, user, confirmation_token):
+    """
+    Consume matching confirmation evidence and queue its command atomically.
+    """
+    try:
+        with transaction.atomic():
+            confirmation = AssetCommandConfirmation.objects.select_for_update().filter(
+                token=confirmation_token,
+                user=user,
+                asset=asset_command.asset,
+                command=asset_command.command,
+                expires_at__gt=timezone.now(),
+            ).first()
+            if confirmation is None:
+                return False
+            asset_command.save()
+            confirmation.delete()
+    except (TypeError, ValidationError, ValueError):
+        return False
+    return True
+
+
 @login_required_api
 def asset_command_set(request, asset_id):
     """
@@ -391,7 +413,12 @@ def asset_command_set(request, asset_id):
         asset_command = AssetCommand(asset=asset, command=command,
                                      position=point, altitude=altitude,
                                      issued_by=issued_by)
-        asset_command.save()
+        if command in AssetCommand.DESTRUCTIVE_COMMANDS:
+            confirmation_token = request.POST.get('confirmation_token')
+            if not _queue_destructive_command(asset_command, request.user, confirmation_token):
+                return HttpResponseBadRequest("Valid confirmation required")
+        else:
+            asset_command.save()
         return HttpResponse("Queued")
     return HttpResponseBadRequest("Only POST is supported")
 

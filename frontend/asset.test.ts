@@ -55,6 +55,70 @@ describe('sendAssetCommand', () => {
     expect(body.get('longitude')).toBe('172.6')
   })
 
+  it('prepares destructive commands and submits the returned token', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ confirmation_token: 'confirm-123' })
+      })
+      .mockResolvedValueOnce({ ok: true, status: 200 })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const servers = { alpha: makeServer('alpha', 'csrf-123') }
+    const asset = makeAsset('Drone', [{ serverKey: 'alpha', assetPk: 42 }])
+
+    await sendAssetCommand(servers, asset, { command: 'TERM' })
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[0][0]).toBe('https://alpha.example/assets/42/command/confirm/')
+    expect((fetchMock.mock.calls[0][1].body as URLSearchParams).get('command')).toBe('TERM')
+    expect(fetchMock.mock.calls[1][0]).toBe('https://alpha.example/assets/42/command/set/')
+    const commandBody = fetchMock.mock.calls[1][1].body as URLSearchParams
+    expect(commandBody.get('command')).toBe('TERM')
+    expect(commandBody.get('confirmation_token')).toBe('confirm-123')
+  })
+
+  it('uses a separate confirmation token for each server target', async () => {
+    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+      if (url.endsWith('/command/confirm/')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ confirmation_token: url.includes('alpha') ? 'alpha-token' : 'beta-token' })
+        }
+      }
+      return { ok: true, status: 200 }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const servers = { alpha: makeServer('alpha'), beta: makeServer('beta') }
+    const asset = makeAsset('Drone', [
+      { serverKey: 'alpha', assetPk: 1 },
+      { serverKey: 'beta', assetPk: 2 }
+    ])
+
+    await sendAssetCommand(servers, asset, { command: 'DISARM' })
+
+    expect(fetchMock).toHaveBeenCalledTimes(4)
+    const setRequests = fetchMock.mock.calls.filter((call) => (call[0] as string).endsWith('/command/set/'))
+    expect((setRequests.find((call) => (call[0] as string).includes('alpha'))![1].body as URLSearchParams).get('confirmation_token')).toBe('alpha-token')
+    expect((setRequests.find((call) => (call[0] as string).includes('beta'))![1].body as URLSearchParams).get('confirmation_token')).toBe('beta-token')
+  })
+
+  it('does not submit a destructive command when confirmation fails', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 500, statusText: 'Server Error' })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const servers = { alpha: makeServer('alpha') }
+    const asset = makeAsset('Drone', [{ serverKey: 'alpha', assetPk: 1 }])
+
+    await expect(sendAssetCommand(servers, asset, { command: 'TERM' })).rejects.toThrow(/alpha: 500 Server Error/)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toBe('https://alpha.example/assets/1/command/confirm/')
+  })
+
   it('dispatches to every server the asset is known on', async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
     vi.stubGlobal('fetch', fetchMock)

@@ -2,9 +2,11 @@
 Tests for the Asset API
 """
 from datetime import timedelta
+from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
+from django.db import IntegrityError
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -23,6 +25,14 @@ class AssetAPITest(TestCase):
         self.client = Client()
         self.asset = Asset.objects.create(name='Test Drone')
         self.user = get_user_model().objects.create_user(username='testuser', password='testpass')
+
+    def _issue_confirmation(self, command, *, asset=None, client=None):
+        target_asset = asset or self.asset
+        target_client = client or self.client
+        url = reverse('asset_command_confirm', kwargs={'asset_id': target_asset.pk})
+        response = target_client.post(url, {'command': command})
+        self.assertEqual(response.status_code, 200)
+        return response.json()['confirmation_token']
 
     def test_asset_command_set_unauthenticated(self):
         """Test that unauthenticated command attempts are rejected."""
@@ -92,7 +102,8 @@ class AssetAPITest(TestCase):
         """The issuing user is recorded on the command and surfaced in the API."""
         self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
-        self.client.post(url, {'command': 'TERM'})
+        token = self._issue_confirmation('TERM')
+        self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
 
         cmd = AssetCommand.objects.filter(asset=self.asset).latest('timestamp')
         self.assertEqual(cmd.issued_by, self.user)
@@ -100,6 +111,110 @@ class AssetAPITest(TestCase):
         status_url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
         data = self.client.get(status_url).json()
         self.assertEqual(data['command']['issued_by'], 'testuser')
+
+    @satisfies('TC-WEB-010')
+    def test_disarm_requires_single_use_confirmation(self):
+        """DISARM requires confirmation evidence and consumes it on success."""
+        self.client.force_login(self.user)
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+
+        response = self.client.post(url, {'command': 'DISARM'})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(AssetCommand.objects.exists())
+
+        token = self._issue_confirmation('DISARM')
+        response = self.client.post(url, {'command': 'DISARM', 'confirmation_token': token})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(AssetCommand.objects.filter(command='DISARM').count(), 1)
+        self.assertFalse(AssetCommandConfirmation.objects.filter(token=token).exists())
+
+        response = self.client.post(url, {'command': 'DISARM', 'confirmation_token': token})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(AssetCommand.objects.filter(command='DISARM').count(), 1)
+
+    @satisfies('TC-WEB-011')
+    def test_term_requires_single_use_confirmation(self):
+        """TERM requires confirmation evidence and consumes it on success."""
+        self.client.force_login(self.user)
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+
+        response = self.client.post(url, {'command': 'TERM'})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(AssetCommand.objects.exists())
+
+        token = self._issue_confirmation('TERM')
+        response = self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(AssetCommand.objects.filter(command='TERM').count(), 1)
+        self.assertFalse(AssetCommandConfirmation.objects.filter(token=token).exists())
+
+    def test_asset_command_set_rejects_expired_confirmation(self):
+        """An expired destructive-command confirmation cannot queue a command."""
+        self.client.force_login(self.user)
+        token = self._issue_confirmation('TERM')
+        AssetCommandConfirmation.objects.filter(token=token).update(expires_at=timezone.now() - timedelta(seconds=1))
+
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        response = self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(AssetCommand.objects.exists())
+
+    def test_asset_command_set_rejects_malformed_confirmation(self):
+        """A malformed token is a validation failure, not a server error."""
+        self.client.force_login(self.user)
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        response = self.client.post(url, {'command': 'TERM', 'confirmation_token': 'not-a-uuid'})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(AssetCommand.objects.exists())
+
+    def test_asset_command_set_rejects_confirmation_for_other_user(self):
+        """A token cannot be transferred to another authenticated user."""
+        self.client.force_login(self.user)
+        token = self._issue_confirmation('TERM')
+        other_user = get_user_model().objects.create_user(username='other', password='testpass')
+        self.client.force_login(other_user)
+
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        response = self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(AssetCommand.objects.exists())
+        self.assertTrue(AssetCommandConfirmation.objects.filter(token=token).exists())
+
+    def test_asset_command_set_rejects_confirmation_for_other_asset(self):
+        """A token cannot be used against a different asset."""
+        self.client.force_login(self.user)
+        token = self._issue_confirmation('TERM')
+        other_asset = Asset.objects.create(name='Other Drone')
+
+        url = reverse('asset_command_set', kwargs={'asset_id': other_asset.pk})
+        response = self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(AssetCommand.objects.exists())
+        self.assertTrue(AssetCommandConfirmation.objects.filter(token=token).exists())
+
+    def test_asset_command_set_rejects_confirmation_for_other_command(self):
+        """A DISARM confirmation cannot authorize TERM."""
+        self.client.force_login(self.user)
+        token = self._issue_confirmation('DISARM')
+
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        response = self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(AssetCommand.objects.exists())
+        self.assertTrue(AssetCommandConfirmation.objects.filter(token=token).exists())
+
+    def test_asset_command_and_confirmation_consumption_are_atomic(self):
+        """A failure while consuming evidence rolls back the queued command."""
+        self.client.force_login(self.user)
+        token = self._issue_confirmation('TERM')
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+
+        with patch.object(AssetCommandConfirmation, 'delete', side_effect=IntegrityError):
+            with self.assertRaises(IntegrityError):
+                self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
+
+        self.assertFalse(AssetCommand.objects.exists())
+        self.assertTrue(AssetCommandConfirmation.objects.filter(token=token).exists())
 
     def test_asset_command_set_goto(self):
         """Test setting GOTO command with coordinates."""
