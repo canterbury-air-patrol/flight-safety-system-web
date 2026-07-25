@@ -8,8 +8,10 @@ CI can point this at a postgis service container; see
 
 import os
 
+# Inherit test-only overrides (including authentication-backend compatibility)
+# and replace only the database engine and connection below.
 # pylint: disable=W0401,W0614
-from .settings import *
+from .test_settings import *
 
 DATABASES = {
     'default': {
