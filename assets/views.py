@@ -16,9 +16,10 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from fss.decorators import login_required_api
 
-from .models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
+from .models import Asset, AssetCommand, AssetCommandConfirmation, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
 
 RTT_SAMPLE_LIMIT = 15
+COMMAND_CONFIRMATION_TTL = timedelta(seconds=60)
 
 # How far back the RTT window-function query below looks. Bounds the scan to
 # a fixed recent window instead of the fleet's entire history, while staying
@@ -323,6 +324,33 @@ def asset_status_json(request, asset_id):
     asset = get_object_or_404(Asset, pk=asset_id)
 
     return JsonResponse(asset_status_data(asset))
+
+
+@login_required_api
+def asset_command_confirm(request, asset_id):
+    """
+    Issue short-lived, single-use evidence for a destructive command.
+    """
+    asset = get_object_or_404(Asset, pk=asset_id)
+    if request.method != "POST":
+        return HttpResponseBadRequest("Only POST is supported")
+
+    command = request.POST.get('command')
+    if command not in AssetCommand.DESTRUCTIVE_COMMANDS:
+        return HttpResponseBadRequest("Invalid destructive command")
+
+    now = timezone.now()
+    AssetCommandConfirmation.objects.filter(expires_at__lte=now).delete()
+    confirmation = AssetCommandConfirmation.objects.create(
+        user=request.user,
+        asset=asset,
+        command=command,
+        expires_at=now + COMMAND_CONFIRMATION_TTL,
+    )
+    return JsonResponse({
+        'confirmation_token': str(confirmation.token),
+        'expires_at': confirmation.expires_at,
+    })
 
 
 @login_required_api

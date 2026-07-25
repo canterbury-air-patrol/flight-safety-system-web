@@ -8,9 +8,10 @@ from django.contrib.gis.geos import Point
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 
-from assets.models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
-from assets.views import RTT_SAMPLE_LIMIT, RTT_SCAN_WINDOW, bulk_asset_status_data
+from assets.models import Asset, AssetCommand, AssetCommandConfirmation, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
+from assets.views import COMMAND_CONFIRMATION_TTL, RTT_SAMPLE_LIMIT, RTT_SCAN_WINDOW, bulk_asset_status_data
 from fss.satisfies import satisfies
 
 
@@ -28,6 +29,45 @@ class AssetAPITest(TestCase):
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
         response = self.client.post(url, {'command': 'RTL'})
         self.assertEqual(response.status_code, 403)
+
+    def test_asset_command_confirm_unauthenticated(self):
+        """Test that unauthenticated confirmation attempts are rejected."""
+        url = reverse('asset_command_confirm', kwargs={'asset_id': self.asset.pk})
+        response = self.client.post(url, {'command': 'TERM'})
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(AssetCommandConfirmation.objects.exists())
+
+    def test_asset_command_confirm_issues_bound_token(self):
+        """A destructive command confirmation returns a short-lived token."""
+        self.client.force_login(self.user)
+        before = timezone.now()
+        url = reverse('asset_command_confirm', kwargs={'asset_id': self.asset.pk})
+        response = self.client.post(url, {'command': 'DISARM'})
+
+        self.assertEqual(response.status_code, 200)
+        confirmation = AssetCommandConfirmation.objects.get(token=response.json()['confirmation_token'])
+        self.assertEqual(confirmation.user, self.user)
+        self.assertEqual(confirmation.asset, self.asset)
+        self.assertEqual(confirmation.command, 'DISARM')
+        self.assertGreaterEqual(confirmation.expires_at, before + COMMAND_CONFIRMATION_TTL)
+        response_expiry = parse_datetime(response.json()['expires_at'])
+        self.assertLess(abs(response_expiry - confirmation.expires_at), timedelta(milliseconds=1))
+
+    def test_asset_command_confirm_rejects_routine_command(self):
+        """Confirmation evidence is issued only for destructive commands."""
+        self.client.force_login(self.user)
+        url = reverse('asset_command_confirm', kwargs={'asset_id': self.asset.pk})
+        response = self.client.post(url, {'command': 'RTL'})
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(AssetCommandConfirmation.objects.exists())
+
+    def test_asset_command_confirm_get_rejected(self):
+        """The confirmation endpoint does not issue tokens via GET."""
+        self.client.force_login(self.user)
+        url = reverse('asset_command_confirm', kwargs={'asset_id': self.asset.pk})
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(AssetCommandConfirmation.objects.exists())
 
     def test_asset_add_unauthenticated(self):
         """Test that unauthenticated asset-add attempts are rejected."""
