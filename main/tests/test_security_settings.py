@@ -2,6 +2,8 @@
 Tests for security-relevant Django settings.
 """
 
+from datetime import timedelta
+
 from django.conf import settings
 from django.test import Client, SimpleTestCase, TestCase, override_settings
 
@@ -27,6 +29,15 @@ class SecuritySettingsTest(SimpleTestCase):
         self.assertEqual(settings.SESSION_COOKIE_AGE, 8 * 60 * 60)
         self.assertTrue(settings.SESSION_SAVE_EVERY_REQUEST)
         self.assertTrue(settings.SESSION_EXPIRE_AT_BROWSER_CLOSE)
+
+    def test_login_failures_use_username_only_rolling_lockout(self):
+        """Credential failures are bounded without trusting proxy IP headers."""
+        self.assertEqual(settings.AXES_FAILURE_LIMIT, 5)
+        self.assertEqual(settings.AXES_COOLOFF_TIME, timedelta(minutes=15))
+        self.assertEqual(settings.AXES_LOCKOUT_PARAMETERS, ['username'])
+        self.assertTrue(settings.AXES_USE_ATTEMPT_EXPIRATION)
+        self.assertTrue(settings.AXES_RESET_ON_SUCCESS)
+        self.assertFalse(settings.AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT)
 
     def test_cors_allows_only_peer_poll_and_command_routes(self):
         """Peer servers can prepare and submit commands, but not read unrelated APIs."""
