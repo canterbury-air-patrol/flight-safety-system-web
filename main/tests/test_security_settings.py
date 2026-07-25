@@ -22,6 +22,13 @@ class SecuritySettingsTest(SimpleTestCase):
         self.assertEqual(settings.SESSION_COOKIE_SAMESITE, 'Lax')
         self.assertEqual(settings.CSRF_COOKIE_SAMESITE, 'Lax')
 
+    def test_cors_allows_only_peer_poll_and_command_routes(self):
+        """Peer servers can prepare and submit commands, but not read unrelated APIs."""
+        self.assertRegex('/current/all.json/', settings.CORS_URLS_REGEX)
+        self.assertRegex('/assets/42/command/confirm/', settings.CORS_URLS_REGEX)
+        self.assertRegex('/assets/42/command/set/', settings.CORS_URLS_REGEX)
+        self.assertNotRegex('/assets/42/status.json', settings.CORS_URLS_REGEX)
+
 
 class MergeCsrfTrustedOriginsTest(SimpleTestCase):
     """

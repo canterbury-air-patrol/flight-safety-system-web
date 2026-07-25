@@ -2,6 +2,8 @@
 Database models for Assets and associated data
 """
 
+import uuid
+
 from django.conf import settings
 from django.contrib.gis.db import models
 from django.utils import timezone
@@ -107,6 +109,7 @@ class AssetCommand(models.Model):
         ('MAN', "Manual"),
     )
     command = models.CharField(max_length=6, choices=COMMAND_CHOICES)
+    DESTRUCTIVE_COMMANDS = ('DISARM', 'TERM')
     REQUIRES_POSITION = ('GOTO', )
     position = models.PointField(geography=True, null=True, blank=True)
     REQUIRES_ALTITUDE = ('ALT', )
@@ -176,3 +179,20 @@ class AssetCommand(models.Model):
                 condition=models.Q(ack_superseded_by__isnull=True) | models.Q(ack_superseded_by=0) | models.Q(ack_state=2),
             ),
         ]
+
+
+class AssetCommandConfirmation(models.Model):
+    """
+    Short-lived evidence that a user confirmed a destructive asset command.
+
+    Each token is bound to one user, asset and exact command. The command view
+    consumes it atomically when it queues the corresponding command.
+    """
+    token = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='+')
+    asset = models.ForeignKey(Asset, on_delete=models.CASCADE)
+    command = models.CharField(max_length=6, choices=AssetCommand.COMMAND_CHOICES)
+    expires_at = models.DateTimeField(db_index=True)
+
+    def __str__(self):
+        return f"Confirmation for {self.user} to send {self.command} to {self.asset}"
