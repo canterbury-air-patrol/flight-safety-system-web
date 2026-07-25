@@ -32,7 +32,7 @@
     "@types/react-dom": "^19.2.3",
     "esbuild": "^0.28.1",
     "esbuild-config": "^1.0.1",
-    "eslint": "^9.39.2",
+    "eslint": "^10.8.0",
     "eslint-plugin-react": "^7.37.5",
     "globals": "^17.7.0",
     "jsdom": "^29.1.1",
