@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
 from assets.models import Asset, AssetCommand, AssetCommandConfirmation, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
-from assets.views import COMMAND_CONFIRMATION_TTL, RTT_SAMPLE_LIMIT, RTT_SCAN_WINDOW, bulk_asset_status_data
+from assets.views import ASSET_CONNECTION_TIMEOUT, COMMAND_CONFIRMATION_TTL, RTT_SAMPLE_LIMIT, RTT_SCAN_WINDOW, bulk_asset_status_data
 from fss.satisfies import satisfies
 
 
@@ -27,6 +27,7 @@ class AssetAPITest(TestCase):
         self.client = Client()
         self.asset = Asset.objects.create(name='Test Drone')
         self.user = get_user_model().objects.create_user(username='testuser', password='testpass')
+        AssetRTT.objects.create(asset=self.asset, rtt=10)
 
     def _issue_confirmation(self, command, *, asset=None, client=None):
         target_asset = asset or self.asset
@@ -138,6 +139,42 @@ class AssetAPITest(TestCase):
         self.assertEqual(cmd.command, 'RTL')
         self.assertEqual(cmd.issued_by, self.user)
 
+    @satisfies('TC-WEB-013')
+    def test_asset_command_set_blocks_asset_without_rtt(self):
+        """An asset that has never answered an RTT cannot be commanded."""
+        self.client.force_login(self.user)
+        AssetRTT.objects.filter(asset=self.asset).delete()
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+
+        response = self.client.post(url, {'command': 'RTL'})
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.content.decode(), 'Asset is disconnected: no recent RTT response')
+        self.assertFalse(AssetCommand.objects.exists())
+
+    @satisfies('TC-WEB-013')
+    def test_asset_command_set_uses_recent_rtt_boundary(self):
+        """A recent RTT permits a command; one outside the grace window blocks it."""
+        self.client.force_login(self.user)
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        rtt = AssetRTT.objects.get(asset=self.asset)
+        rtt.timestamp = timezone.now() - ASSET_CONNECTION_TIMEOUT + timedelta(seconds=5)
+        rtt.save(update_fields=['timestamp'])
+
+        response = self.client.post(url, {'command': 'RTL'})
+
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(AssetCommand.objects.filter(asset=self.asset, command='RTL').exists())
+
+        AssetCommand.objects.all().delete()
+        rtt.timestamp = timezone.now() - ASSET_CONNECTION_TIMEOUT - timedelta(seconds=5)
+        rtt.save(update_fields=['timestamp'])
+
+        response = self.client.post(url, {'command': 'RTL'})
+
+        self.assertEqual(response.status_code, 409)
+        self.assertFalse(AssetCommand.objects.exists())
+
     @satisfies('TC-WEB-008')
     def test_asset_command_records_issuer(self):
         """The issuing user is recorded on the command and surfaced in the API."""
@@ -226,6 +263,7 @@ class AssetAPITest(TestCase):
         self.client.force_login(self.user)
         token = self._issue_confirmation('TERM')
         other_asset = Asset.objects.create(name='Other Drone')
+        AssetRTT.objects.create(asset=other_asset, rtt=10)
 
         url = reverse('asset_command_set', kwargs={'asset_id': other_asset.pk})
         response = self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
@@ -383,6 +421,7 @@ class AssetAPITest(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data['asset']['name'], 'Test Drone')
+        self.assertTrue(data['connected'])
 
     def test_asset_status_json_command_code(self):
         """Test that asset_status_json includes command_code alongside the display string."""
@@ -496,6 +535,7 @@ class AssetAPITest(TestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(data['asset']['name'], 'Empty Drone')
+        self.assertFalse(data['connected'])
         self.assertNotIn('position', data)
         self.assertNotIn('status', data)
         self.assertNotIn('rtt', data)
@@ -503,6 +543,7 @@ class AssetAPITest(TestCase):
     def test_rtt_sample_limit(self):
         """Test that RTT calculation only uses the latest RTT_SAMPLE_LIMIT samples."""
         self.client.force_login(self.user)
+        AssetRTT.objects.filter(asset=self.asset).delete()
         total_samples = RTT_SAMPLE_LIMIT + 5
         for i in range(1, total_samples + 1):
             AssetRTT.objects.create(asset=self.asset, rtt=i)
@@ -517,6 +558,7 @@ class AssetAPITest(TestCase):
 
     def test_bulk_asset_status_data_ignores_rtts_older_than_scan_window(self):
         """RTTs older than RTT_SCAN_WINDOW are excluded from the aggregation (PERF-02)."""
+        AssetRTT.objects.filter(asset=self.asset).delete()
         now = timezone.now()
         AssetRTT.objects.create(asset=self.asset, rtt=999, timestamp=now - RTT_SCAN_WINDOW - timedelta(minutes=1))
         AssetRTT.objects.create(asset=self.asset, rtt=42, timestamp=now)
@@ -553,6 +595,7 @@ class AssetAPITest(TestCase):
 
     def test_bulk_asset_status_data_per_asset_rtts(self):
         """Each asset gets its own RTT aggregation; assets without RTTs omit the key."""
+        AssetRTT.objects.filter(asset=self.asset).delete()
         now = timezone.now()
         multi = self.asset
         single = Asset.objects.create(name='Single RTT Drone')
