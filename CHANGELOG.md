@@ -5,6 +5,7 @@
 ### Security
 
 - **Server-side destructive-command confirmation** — `DISARM` and `TERM` now require a 60-second, single-use confirmation token bound to the authenticated user, asset, and exact command. Multi-server clients prepare and consume an independent token on each peer, and direct or replayed command submissions are rejected without creating a command.
+- **Disconnected-asset command block** — command submission now requires a per-asset RTT response no more than 60 seconds old. The backend returns `409` without creating a command when that liveness proof is absent; the frontend disables controls with no live target and skips and reports unreachable, unauthenticated, or asset-disconnected peers.
 - **Operator session expiry** — authenticated sessions now use an eight-hour request-sliding lifetime and a browser-session cookie. Expired sessions receive the API's authentication `403` and cannot create commands.
 - **Login failure throttling** — each server now temporarily locks a submitted username after five failed authentications in a rolling 15-minute window. Lockout responses remain indistinguishable from invalid credentials, retries do not extend the lockout, and operators can inspect or clear attempts through Django Axes.
 
