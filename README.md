@@ -13,6 +13,15 @@ are marked `Secure` in production (`SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`
 so they will not be transmitted over plain HTTP at all. Serving any instance
 over HTTP means operators cannot log in and no commands can be sent.
 
+### Operator sessions expire after eight hours
+
+Operator sessions use an eight-hour sliding expiry and a browser-session
+cookie. Each request refreshes the eight-hour window, and closing the browser
+normally removes the cookie. Because the status UI polls automatically, an
+open tab counts as activity and can keep its session authenticated
+indefinitely; operators must close the browser when leaving a console
+unattended.
+
 ### Multi-server deployments must share a registered domain
 
 When running more than one FSS web instance (for redundancy), every instance

@@ -434,7 +434,11 @@ def asset_add(request):
     if asset_name is None:
         return HttpResponseBadRequest("Missing asset_name")
     try:
-        Asset.objects.create(name=asset_name)
+        # Contain the expected uniqueness failure in a savepoint. This keeps
+        # the surrounding request transaction usable when session middleware
+        # persists the sliding expiry after the view returns.
+        with transaction.atomic():
+            Asset.objects.create(name=asset_name)
     except IntegrityError:
         # Relies on Asset.name's unique constraint rather than a racy
         # exists()-then-save() check, so two concurrent requests for the same
