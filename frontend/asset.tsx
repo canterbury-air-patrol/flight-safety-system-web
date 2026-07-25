@@ -33,26 +33,60 @@ export const getAssetServerURL = (server: ServerState, assetServer: AssetServerS
 interface AssetTarget {
   server: ServerState
   assetServer: AssetServerState
+  blockedReason?: string
 }
 
 const isDestructiveCommand = (command: Command): command is DestructiveCommand => command === 'DISARM' || command === 'TERM'
+
+const assetTargetBlockReason = (server: ServerState, assetServer: AssetServerState): string | undefined => {
+  if (!server.connected) return 'management server unreachable'
+  if (!server.userName || !server.csrfToken) return 'login required'
+  if (assetServer.data?.connected !== true) return 'asset disconnected'
+  return undefined
+}
 
 const resolveAssetTargets = (knownServers: Record<string, ServerState>, asset: AssetState): AssetTarget[] => {
   const targetsByOrigin = new Map<string, AssetTarget>()
   for (const [serverKey, assetServer] of Object.entries(asset.servers)) {
     const server = knownServers[serverKey]
     if (!server) continue
-    if (!targetsByOrigin.has(server.url)) {
-      targetsByOrigin.set(server.url, { assetServer, server })
+    const target = { assetServer, server, blockedReason: assetTargetBlockReason(server, assetServer) }
+    const existing = targetsByOrigin.get(server.url)
+    // Prefer a commandable entry when old aliases for the same origin coexist.
+    if (!existing || (existing.blockedReason && !target.blockedReason)) {
+      targetsByOrigin.set(server.url, target)
     }
   }
 
   return Array.from(targetsByOrigin.values())
 }
 
+export interface AssetCommandAvailability {
+  commandable: boolean
+  blockedReasons: string[]
+}
+
+export const assetCommandAvailability = (knownServers: Record<string, ServerState>, asset: AssetState): AssetCommandAvailability => {
+  const targets = resolveAssetTargets(knownServers, asset)
+  const blockedReasons = targets.filter((target) => target.blockedReason).map((target) => `${target.assetServer.serverName}: ${target.blockedReason}`)
+  if (targets.length === 0) {
+    blockedReasons.push('no known management server')
+  }
+  return {
+    commandable: targets.some((target) => !target.blockedReason),
+    blockedReasons
+  }
+}
+
 export const sendAssetCommand = async (knownServers: Record<string, ServerState>, asset: AssetState, data: CommandPayload) => {
   const entries: [string, string][] = Object.entries(data).map(([k, v]) => [k, String(v)])
-  const targets = resolveAssetTargets(knownServers, asset)
+  const resolvedTargets = resolveAssetTargets(knownServers, asset)
+  const targets = resolvedTargets.filter((target) => !target.blockedReason)
+  const skipped = resolvedTargets.filter((target) => target.blockedReason)
+  if (targets.length === 0) {
+    const reasons = skipped.length > 0 ? skipped.map((target) => `${target.assetServer.serverName}: ${target.blockedReason}`).join(', ') : 'no known management server'
+    throw new Error(`Command not sent — ${asset.name} has no commandable server (${reasons})`)
+  }
   const results = await Promise.allSettled(
     targets.map(async ({ assetServer, server }) => {
       const post = (path: string, bodyEntries: [string, string][]) =>
@@ -66,6 +100,7 @@ export const sendAssetCommand = async (knownServers: Record<string, ServerState>
           body: new URLSearchParams(bodyEntries)
         }).then((response) => {
           if (response.status === 403) throw new Error('not authenticated — please refresh and log in')
+          if (response.status === 409) throw new Error('asset disconnected — no recent RTT response')
           if (!response.ok) throw new Error(`${response.status} ${response.statusText}`)
           return response
         })
@@ -85,7 +120,7 @@ export const sendAssetCommand = async (knownServers: Record<string, ServerState>
 
   const failures = results.map((result, i) => ({ result, serverName: targets[i].assetServer.serverName })).filter(({ result }) => result.status === 'rejected')
 
-  if (failures.length > 0) {
+  if (failures.length > 0 || skipped.length > 0) {
     const failureMessages = failures
       .map(({ result, serverName }) => {
         const reason = (result as PromiseRejectedResult).reason
@@ -94,8 +129,10 @@ export const sendAssetCommand = async (knownServers: Record<string, ServerState>
       })
       .join(', ')
     const successCount = targets.length - failures.length
-    const prefix = successCount > 0 ? `Command was queued on ${successCount} of ${targets.length} server(s) — aircraft may already be affected. ` : ''
-    throw new Error(`${prefix}Failed on: ${failureMessages}`)
+    const prefix = successCount > 0 ? `Command was queued on ${successCount} of ${resolvedTargets.length} server(s) — aircraft may already be affected. ` : ''
+    const skippedMessage = skipped.length > 0 ? `Skipped: ${skipped.map((target) => `${target.assetServer.serverName}: ${target.blockedReason}`).join(', ')}. ` : ''
+    const failedMessage = failures.length > 0 ? `Failed on: ${failureMessages}` : ''
+    throw new Error(`${prefix}${skippedMessage}${failedMessage}`.trim())
   }
 }
 

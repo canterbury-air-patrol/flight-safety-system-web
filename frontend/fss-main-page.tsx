@@ -1,5 +1,5 @@
 import { type Axis, degreesToDM, DMToDegrees } from '@canterbury-air-patrol/deg-converter'
-import { AssetState, AssetServerState, AssetController, createAssetController, mergeServerAssets } from './asset'
+import { AssetState, AssetServerState, AssetController, assetCommandAvailability, createAssetController, mergeServerAssets } from './asset'
 import { ServerState, canonicalServerOrigin, createServer, getServerURL, serverConnectFailed, serverUnauthenticated, AssetPositionData, mergeServerPollResult } from './server'
 import {
   assetPositionTimeWarn,
@@ -59,9 +59,10 @@ const useCommand = () => {
 
 interface AssetProps {
   controller: AssetController
+  disabled?: boolean
 }
 
-const AltitudeSelect: React.FC<AssetProps> = ({ controller }) => {
+const AltitudeSelect: React.FC<AssetProps> = ({ controller, disabled = false }) => {
   const [newAltitude, setNewAltitude] = useState(100)
   const command = useCommand()
 
@@ -69,6 +70,7 @@ const AltitudeSelect: React.FC<AssetProps> = ({ controller }) => {
     <ModalWithButton
       label="Altitude"
       variant="outline-secondary"
+      disabled={disabled}
       title="Set Target Altitude:"
       body={
         <>
@@ -78,7 +80,7 @@ const AltitudeSelect: React.FC<AssetProps> = ({ controller }) => {
       }
       footer={(onClose) => (
         <>
-          <Button variant="light" onClick={command(() => controller.Altitude(newAltitude), onClose)}>
+          <Button variant="light" onClick={command(() => controller.Altitude(newAltitude), onClose)} disabled={disabled}>
             Set Altitude
           </Button>
           <Button variant="primary" onClick={onClose}>
@@ -92,7 +94,7 @@ const AltitudeSelect: React.FC<AssetProps> = ({ controller }) => {
 
 const getDefaultPosition = (): AssetPositionData => ({ timestamp: '', lat: 0, lng: 0 })
 
-const Goto: React.FC<AssetProps> = ({ controller }) => {
+const Goto: React.FC<AssetProps> = ({ controller, disabled = false }) => {
   const [position, setPosition] = useState<AssetPositionData | undefined>(undefined)
   const command = useCommand()
 
@@ -126,6 +128,7 @@ const Goto: React.FC<AssetProps> = ({ controller }) => {
     <ModalWithButton
       label="Goto"
       variant="outline-secondary"
+      disabled={disabled}
       onShow={onShow}
       title={<>Send {controller.name} to:</>}
       body={
@@ -143,7 +146,7 @@ const Goto: React.FC<AssetProps> = ({ controller }) => {
       }
       footer={(onClose) => (
         <>
-          <Button variant="light" onClick={handleGoto(onClose)} disabled={!position}>
+          <Button variant="light" onClick={handleGoto(onClose)} disabled={disabled || !position}>
             Goto
           </Button>
           <Button variant="primary" onClick={onClose}>
@@ -155,27 +158,27 @@ const Goto: React.FC<AssetProps> = ({ controller }) => {
   )
 }
 
-const FSSAssetControls: React.FC<AssetProps> = ({ controller }) => {
+export const FSSAssetControls: React.FC<AssetProps> = ({ controller, disabled = false }) => {
   const command = useCommand()
 
   return (
     <div className="asset-buttons btn-group" role="group">
-      <button className="btn btn-outline-secondary" onClick={command(controller.RTL)}>
+      <button className="btn btn-outline-secondary" onClick={command(controller.RTL)} disabled={disabled}>
         RTL
       </button>
-      <button className="btn btn-outline-secondary" onClick={command(controller.Hold)}>
+      <button className="btn btn-outline-secondary" onClick={command(controller.Hold)} disabled={disabled}>
         Hold
       </button>
-      <AltitudeSelect controller={controller} />
-      <Goto controller={controller} />
-      <button className="btn btn-outline-secondary" onClick={command(controller.Continue)}>
+      <AltitudeSelect controller={controller} disabled={disabled} />
+      <Goto controller={controller} disabled={disabled} />
+      <button className="btn btn-outline-secondary" onClick={command(controller.Continue)} disabled={disabled}>
         Continue
       </button>
-      <button className="btn btn-info" onClick={command(controller.Manual)}>
+      <button className="btn btn-info" onClick={command(controller.Manual)} disabled={disabled}>
         Manual
       </button>
-      <DisArm controller={controller} command={command} />
-      <Terminate controller={controller} command={command} />
+      <DisArm controller={controller} command={command} disabled={disabled} />
+      <Terminate controller={controller} command={command} disabled={disabled} />
     </div>
   )
 }
@@ -385,13 +388,19 @@ interface FSSAssetContainerProps {
   setSelected: (asset: string, server: string) => void
 }
 
-function FSSAsset(props: FSSAssetContainerProps) {
+export function FSSAsset(props: FSSAssetContainerProps) {
   const { asset, knownServers, setSelected } = props
   const controller = useMemo(() => createAssetController(knownServers, asset), [knownServers, asset])
+  const commandAvailability = useMemo(() => assetCommandAvailability(knownServers, asset), [knownServers, asset])
   return (
     <div className="asset">
       <div className="asset-label">{asset.name}</div>
-      <FSSAssetControls controller={controller} />
+      {!commandAvailability.commandable && (
+        <div className="alert alert-warning asset-command-disabled" role="status">
+          <strong>Commands disabled:</strong> {commandAvailability.blockedReasons.join(', ')}
+        </div>
+      )}
+      <FSSAssetControls controller={controller} disabled={!commandAvailability.commandable} />
       <FSSAssetStatus asset={asset} setSelected={setSelected} />
     </div>
   )

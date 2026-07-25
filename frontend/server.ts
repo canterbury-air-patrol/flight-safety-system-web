@@ -56,6 +56,10 @@ export interface AssetStatus {
     name: string
     pk: number
   }
+  // Server-side command-liveness decision, based on the most recent RTT.
+  // Optional only for compatibility with status cached from an older peer;
+  // command submission treats a missing value as disconnected.
+  connected?: boolean
   position?: AssetPositionData
   status?: AssetStatusData
   search?: AssetSearchData

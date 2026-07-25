@@ -6,15 +6,26 @@ import { AssetStatus } from './server'
 
 const makeServer = (name: string, csrfToken = 'tok', url = `https://${name}.example`): ServerState => ({
   ...createServer(name, '10.0.0.1', 8080, url),
+  connected: true,
+  userName: 'pilot',
   csrfToken
 })
 
-const makeAsset = (name: string, servers: Array<{ serverKey: string; serverName?: string; assetPk: number }>): AssetState => ({
+const makeAsset = (name: string, servers: Array<{ serverKey: string; serverName?: string; assetPk: number; connected?: boolean }>): AssetState => ({
   name,
-  servers: Object.fromEntries(servers.map((s) => [s.serverKey, { serverName: s.serverName ?? s.serverKey, assetPk: s.assetPk }]))
+  servers: Object.fromEntries(
+    servers.map((s) => [
+      s.serverKey,
+      {
+        serverName: s.serverName ?? s.serverKey,
+        assetPk: s.assetPk,
+        data: statusFor(name, s.assetPk, s.connected ?? true)
+      }
+    ])
+  )
 })
 
-const statusFor = (name: string, pk: number): AssetStatus => ({ asset: { name, pk } })
+const statusFor = (name: string, pk: number, connected = true): AssetStatus => ({ asset: { name, pk }, connected })
 
 describe('sendAssetCommand', () => {
   afterEach(() => {
@@ -149,6 +160,35 @@ describe('sendAssetCommand', () => {
 
     await sendAssetCommand(servers, asset, { command: 'RTL' })
 
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(fetchMock.mock.calls[0][0]).toBe('https://alpha.example/assets/1/command/set/')
+  })
+
+  it('does not submit when no server reports a live asset connection', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+
+    const servers = { alpha: makeServer('alpha') }
+    const asset = makeAsset('Drone', [{ serverKey: 'alpha', assetPk: 1, connected: false }])
+
+    await expect(sendAssetCommand(servers, asset, { command: 'RTL' })).rejects.toThrow(/Drone has no commandable server.*alpha: asset disconnected/)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('skips and reports an unauthenticated peer while dispatching to a commandable server', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const servers = {
+      alpha: makeServer('alpha'),
+      beta: { ...makeServer('beta'), userName: undefined, csrfToken: undefined }
+    }
+    const asset = makeAsset('Drone', [
+      { serverKey: 'alpha', assetPk: 1 },
+      { serverKey: 'beta', assetPk: 2 }
+    ])
+
+    await expect(sendAssetCommand(servers, asset, { command: 'RTL' })).rejects.toThrow(/queued on 1 of 2 server\(s\).*Skipped: beta: login required/s)
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0][0]).toBe('https://alpha.example/assets/1/command/set/')
   })
