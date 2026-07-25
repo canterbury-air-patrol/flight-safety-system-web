@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/6.0/ref/settings/
 """
 
 import os
+from datetime import timedelta
 
 # Build paths inside the project like this: os.path.join(BASE_DIR, ...)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -78,6 +79,7 @@ INSTALLED_APPS = [
     'config',
     'assets',
     'main',
+    'axes',
     'corsheaders',
     'django.contrib.admin',
     'django.contrib.auth',
@@ -96,7 +98,36 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'axes.middleware.AxesMiddleware',
 ]
+
+AUTHENTICATION_BACKENDS = [
+    'axes.backends.AxesStandaloneBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
+# Authentication credentials grant safety-critical command authority. Track
+# repeated failures in the database by submitted username, independent of
+# client IP, and temporarily block that username after five failures in a
+# rolling fifteen-minute window. Successful authentication starts a fresh
+# window. The custom lockout callable preserves each login view's normal
+# generic failure response instead of revealing whether a lockout exists.
+AXES_FAILURE_LIMIT = 5
+AXES_COOLOFF_TIME = timedelta(minutes=15)
+AXES_USE_ATTEMPT_EXPIRATION = True
+AXES_RESET_ON_SUCCESS = True
+# Retrying during an active lockout must not extend it indefinitely.
+AXES_RESET_COOL_OFF_ON_FAILURE_DURING_LOCKOUT = False
+AXES_LOCKOUT_PARAMETERS = ['username']
+AXES_CLIENT_IP_CALLABLE = 'fss.security.ignore_client_ip'
+AXES_LOCKOUT_CALLABLE = 'fss.security.preserve_auth_failure_response'
+# Axes warns whenever IP is absent even for username-only aggregation. That is
+# deliberate here: trusting forwarded addresses without a standardized proxy
+# would let clients evade IP limits, while REMOTE_ADDR would lock every
+# operator behind the same proxy. Preserve deployment-specific check silences.
+SILENCED_SYSTEM_CHECKS = sorted(set(
+    globals().get('SILENCED_SYSTEM_CHECKS', [])
+) | {'axes.W006'})
 
 ROOT_URLCONF = 'fss.urls'
 
