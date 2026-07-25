@@ -12,9 +12,10 @@ interface ModalWithButtonProps {
   body: ReactNode
   footer: (onClose: () => void) => ReactNode
   onShow?: () => void
+  disabled?: boolean
 }
 
-export const ModalWithButton: React.FC<ModalWithButtonProps> = ({ label, variant, title, body, footer, onShow }) => {
+export const ModalWithButton: React.FC<ModalWithButtonProps> = ({ label, variant, title, body, footer, onShow, disabled = false }) => {
   const [isOpen, setIsOpen] = useState(false)
   const handleClose = () => setIsOpen(false)
   const handleShow = () => {
@@ -24,7 +25,7 @@ export const ModalWithButton: React.FC<ModalWithButtonProps> = ({ label, variant
 
   return (
     <>
-      <Button onClick={handleShow} variant={variant}>
+      <Button onClick={handleShow} variant={variant} disabled={disabled}>
         {label}
       </Button>
       <Modal show={isOpen} onHide={handleClose}>
@@ -41,17 +42,19 @@ export const ModalWithButton: React.FC<ModalWithButtonProps> = ({ label, variant
 interface DestructiveCommandProps {
   controller: AssetController
   command: CommandExecutor
+  disabled?: boolean
 }
 
-export const DisArm: React.FC<DestructiveCommandProps> = ({ controller, command }) => (
+export const DisArm: React.FC<DestructiveCommandProps> = ({ controller, command, disabled = false }) => (
   <ModalWithButton
     label="DisArm"
     variant="danger"
     title={<>Disarm {controller.name}</>}
     body={<>Warning this will probably result in the aircraft crashing. Use only when all other options are unsafe.</>}
+    disabled={disabled}
     footer={(onClose) => (
       <>
-        <Button variant="danger" onClick={command(controller.DisArm, onClose)}>
+        <Button variant="danger" onClick={command(controller.DisArm, onClose)} disabled={disabled}>
           DisArm
         </Button>
         <Button variant="primary" onClick={onClose}>
@@ -62,7 +65,7 @@ export const DisArm: React.FC<DestructiveCommandProps> = ({ controller, command 
   />
 )
 
-export const Terminate: React.FC<DestructiveCommandProps> = ({ controller, command }) => (
+export const Terminate: React.FC<DestructiveCommandProps> = ({ controller, command, disabled = false }) => (
   <ModalWithButton
     label="Terminate"
     variant="danger"
@@ -73,15 +76,16 @@ export const Terminate: React.FC<DestructiveCommandProps> = ({ controller, comma
         property. Use RTL or Hold instead.
       </>
     }
+    disabled={disabled}
     footer={(onClose) => (
       <>
-        <Button variant="danger" onClick={command(controller.Terminate, onClose)}>
+        <Button variant="danger" onClick={command(controller.Terminate, onClose)} disabled={disabled}>
           Terminate Flight
         </Button>
-        <Button variant="light" onClick={command(controller.RTL, onClose)}>
+        <Button variant="light" onClick={command(controller.RTL, onClose)} disabled={disabled}>
           RTL
         </Button>
-        <Button variant="light" onClick={command(controller.Hold, onClose)}>
+        <Button variant="light" onClick={command(controller.Hold, onClose)} disabled={disabled}>
           Hold
         </Button>
         <Button variant="primary" onClick={onClose}>
