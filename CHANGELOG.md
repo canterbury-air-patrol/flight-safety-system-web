@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Security
+
+- **Server-side destructive-command confirmation** — `DISARM` and `TERM` now require a 60-second, single-use confirmation token bound to the authenticated user, asset, and exact command. Multi-server clients prepare and consume an independent token on each peer, and direct or replayed command submissions are rejected without creating a command.
+- **Operator session expiry** — authenticated sessions now use an eight-hour request-sliding lifetime and a browser-session cookie. Expired sessions receive the API's authentication `403` and cannot create commands.
+
 ## 1.0.0 — 2026-05-17
 
 First production release.

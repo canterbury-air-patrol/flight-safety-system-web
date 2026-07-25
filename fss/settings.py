@@ -33,6 +33,14 @@ globals().setdefault('SESSION_COOKIE_SECURE', True)
 globals().setdefault('CSRF_COOKIE_SECURE', True)
 globals().setdefault('SESSION_COOKIE_SAMESITE', 'Lax')
 globals().setdefault('CSRF_COOKIE_SAMESITE', 'Lax')
+# Keep authenticated command authority within an operational shift. Saving on
+# every request makes this an inactivity timeout rather than an absolute
+# lifetime, while a session cookie prevents credentials persisting across a
+# normal browser restart. Site-specific settings may deliberately tighten
+# these defaults.
+globals().setdefault('SESSION_COOKIE_AGE', 8 * 60 * 60)
+globals().setdefault('SESSION_SAVE_EVERY_REQUEST', True)
+globals().setdefault('SESSION_EXPIRE_AT_BROWSER_CLOSE', True)
 
 
 def merge_csrf_trusted_origins(csrf_trusted, cors_allowed):

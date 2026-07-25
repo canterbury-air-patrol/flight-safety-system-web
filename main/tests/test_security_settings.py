@@ -22,6 +22,12 @@ class SecuritySettingsTest(SimpleTestCase):
         self.assertEqual(settings.SESSION_COOKIE_SAMESITE, 'Lax')
         self.assertEqual(settings.CSRF_COOKIE_SAMESITE, 'Lax')
 
+    def test_operator_sessions_use_sliding_shift_length_expiry(self):
+        """Operator sessions are browser-bound and expire after eight idle hours."""
+        self.assertEqual(settings.SESSION_COOKIE_AGE, 8 * 60 * 60)
+        self.assertTrue(settings.SESSION_SAVE_EVERY_REQUEST)
+        self.assertTrue(settings.SESSION_EXPIRE_AT_BROWSER_CLOSE)
+
     def test_cors_allows_only_peer_poll_and_command_routes(self):
         """Peer servers can prepare and submit commands, but not read unrelated APIs."""
         self.assertRegex('/current/all.json/', settings.CORS_URLS_REGEX)

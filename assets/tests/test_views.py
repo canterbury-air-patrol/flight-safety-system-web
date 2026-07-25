@@ -4,8 +4,10 @@ Tests for the Asset API
 from datetime import timedelta
 from unittest.mock import patch
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
+from django.contrib.sessions.models import Session
 from django.db import IntegrityError
 from django.test import Client, TestCase
 from django.urls import reverse
@@ -39,6 +41,45 @@ class AssetAPITest(TestCase):
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
         response = self.client.post(url, {'command': 'RTL'})
         self.assertEqual(response.status_code, 403)
+
+    @satisfies('TC-WEB-014')
+    def test_asset_command_set_rejects_expired_session(self):
+        """An expired operator session cannot create a command."""
+        self.client.force_login(self.user)
+        session_key = self.client.cookies[settings.SESSION_COOKIE_NAME].value
+        Session.objects.filter(session_key=session_key).update(
+            expire_date=timezone.now() - timedelta(seconds=1),
+        )
+
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        response = self.client.post(url, {'command': 'RTL'})
+
+        self.assertEqual(response.status_code, 403)
+        self.assertFalse(AssetCommand.objects.exists())
+
+    def test_authenticated_activity_refreshes_session_expiry(self):
+        """A request within the session window extends command authority."""
+        self.client.force_login(self.user)
+        session_key = self.client.cookies[settings.SESSION_COOKIE_NAME].value
+        previous_expiry = timezone.now() + timedelta(minutes=5)
+        Session.objects.filter(session_key=session_key).update(
+            expire_date=previous_expiry,
+        )
+
+        status_url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
+        activity_time = timezone.now()
+        response = self.client.get(status_url)
+
+        self.assertEqual(response.status_code, 200)
+        refreshed_expiry = Session.objects.get(session_key=session_key).expire_date
+        expected_expiry = activity_time + timedelta(seconds=settings.SESSION_COOKIE_AGE)
+        self.assertGreater(refreshed_expiry, previous_expiry)
+        self.assertLess(abs(refreshed_expiry - expected_expiry), timedelta(seconds=5))
+
+        command_url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        response = self.client.post(command_url, {'command': 'RTL'})
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(AssetCommand.objects.filter(asset=self.asset, command='RTL').exists())
 
     def test_asset_command_confirm_unauthenticated(self):
         """Test that unauthenticated confirmation attempts are rejected."""
