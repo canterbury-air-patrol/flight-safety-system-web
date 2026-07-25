@@ -22,6 +22,29 @@ open tab counts as activity and can keep its session authenticated
 indefinitely; operators must close the browser when leaving a console
 unattended.
 
+### Failed logins are temporarily locked
+
+Each FSS web instance tracks failed authentication by submitted username. Five
+failures within a rolling 15-minute window temporarily lock that username on
+that instance. A successful login before the limit resets the failures.
+Attempts made during a lockout do not extend it.
+
+The login page always shows the same `Invalid username or password` message,
+including during a lockout. Current failures and successful access records are
+available through the Django admin's Axes pages, and lockouts emit a warning to
+the application log. An administrator can clear a username before the cool-off
+expires with:
+
+```bash
+./manage.py axes_reset_username USERNAME
+```
+
+In a multi-server deployment, each peer stores its own failure counter in its
+own PostgreSQL database. The five-attempt limit therefore applies separately
+on every peer, and an administrator must run the reset on every peer where the
+username is locked. Deployments that require one aggregate threshold across
+all peers must additionally enforce it at a shared, trusted reverse proxy.
+
 ### Multi-server deployments must share a registered domain
 
 When running more than one FSS web instance (for redundancy), every instance
