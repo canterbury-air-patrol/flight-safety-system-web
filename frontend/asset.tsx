@@ -1,6 +1,7 @@
 import { AssetPositionData, AssetStatus, ServerState, getServerURL } from './server'
 
 export type Command = 'GOTO' | 'ALT' | 'RTL' | 'HOLD' | 'RON' | 'DISARM' | 'TERM' | 'MAN'
+type DestructiveCommand = Extract<Command, 'DISARM' | 'TERM'>
 
 export type CommandPayload =
   | { command: 'GOTO'; latitude: number; longitude: number }
@@ -34,6 +35,8 @@ interface AssetTarget {
   assetServer: AssetServerState
 }
 
+const isDestructiveCommand = (command: Command): command is DestructiveCommand => command === 'DISARM' || command === 'TERM'
+
 const resolveAssetTargets = (knownServers: Record<string, ServerState>, asset: AssetState): AssetTarget[] => {
   const targetsByOrigin = new Map<string, AssetTarget>()
   for (const [serverKey, assetServer] of Object.entries(asset.servers)) {
@@ -51,19 +54,32 @@ export const sendAssetCommand = async (knownServers: Record<string, ServerState>
   const entries: [string, string][] = Object.entries(data).map(([k, v]) => [k, String(v)])
   const targets = resolveAssetTargets(knownServers, asset)
   const results = await Promise.allSettled(
-    targets.map(({ assetServer, server }) => {
-      return fetch(getAssetServerURL(server, assetServer, 'command/set/'), {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-          'X-CSRFToken': server.csrfToken ?? ''
-        },
-        body: new URLSearchParams(entries)
-      }).then((r) => {
-        if (r.status === 403) throw new Error('not authenticated — please refresh and log in')
-        if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
-      })
+    targets.map(async ({ assetServer, server }) => {
+      const post = (path: string, bodyEntries: [string, string][]) =>
+        fetch(getAssetServerURL(server, assetServer, path), {
+          method: 'POST',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+            'X-CSRFToken': server.csrfToken ?? ''
+          },
+          body: new URLSearchParams(bodyEntries)
+        }).then((response) => {
+          if (response.status === 403) throw new Error('not authenticated — please refresh and log in')
+          if (!response.ok) throw new Error(`${response.status} ${response.statusText}`)
+          return response
+        })
+
+      let commandEntries = entries
+      if (isDestructiveCommand(data.command)) {
+        const confirmationResponse = await post('command/confirm/', [['command', data.command]])
+        const confirmation = (await confirmationResponse.json()) as { confirmation_token?: unknown }
+        if (typeof confirmation.confirmation_token !== 'string') {
+          throw new Error('server returned an invalid confirmation token')
+        }
+        commandEntries = [...entries, ['confirmation_token', confirmation.confirmation_token]]
+      }
+      await post('command/set/', commandEntries)
     })
   )
 
