@@ -20,6 +20,7 @@ from .models import Asset, AssetCommand, AssetCommandConfirmation, AssetPosition
 
 RTT_SAMPLE_LIMIT = 15
 COMMAND_CONFIRMATION_TTL = timedelta(seconds=60)
+ASSET_CONNECTION_TIMEOUT = timedelta(seconds=60)
 
 # How far back the RTT window-function query below looks. Bounds the scan to
 # a fixed recent window instead of the fleet's entire history, while staying
@@ -37,6 +38,29 @@ def server_now_ms():
     browser clock with server/FMU timestamps, which clock skew would corrupt.
     """
     return int(timezone.now().timestamp() * 1000)
+
+
+def asset_has_live_connection(asset, now=None):
+    """
+    Return whether the asset has answered an RTT request recently enough to
+    accept a command.
+
+    RTT responses are the server's direct per-asset liveness signal. The FSS
+    server normally requests one every 10 seconds and times a client out after
+    30 seconds; a 60-second web-side window tolerates scheduling/database
+    jitter while still refusing commands for a connection that is no longer
+    plausibly live.
+    """
+    cutoff = (now or timezone.now()) - ASSET_CONNECTION_TIMEOUT
+    return AssetRTT.objects.filter(asset=asset, timestamp__gte=cutoff).exists()
+
+
+def _latest_rtt_is_recent(rtts, now=None):
+    """Classify an already-fetched, newest-first RTT collection."""
+    if not rtts:
+        return False
+    cutoff = (now or timezone.now()) - ASSET_CONNECTION_TIMEOUT
+    return rtts[0].timestamp >= cutoff
 
 
 @ensure_csrf_cookie
@@ -160,7 +184,7 @@ def _format_command(cmd):
 
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments
-def format_asset_status(asset, position=None, status=None, search=None, rtts=None, command=None):
+def format_asset_status(asset, position=None, status=None, search=None, rtts=None, command=None, now=None):
     """
     Centralized formatting logic for asset status data.
     """
@@ -168,7 +192,11 @@ def format_asset_status(asset, position=None, status=None, search=None, rtts=Non
         'asset': {
             'name': asset.name,
             'pk': asset.pk,
-        }
+        },
+        # This is deliberately based on RTT rather than generic telemetry:
+        # position/status reports may be infrequent while RTT is the FSS
+        # server's active connection heartbeat.
+        'connected': _latest_rtt_is_recent(rtts, now),
     }
 
     pos_data = _format_position(position)
@@ -226,6 +254,7 @@ def asset_status_data(asset):
         search=search,
         rtts=rtts,
         command=command,
+        now=timezone.now(),
     )
 
 
@@ -288,11 +317,12 @@ def bulk_asset_status_data(assets):
     # stays portable across the spatialite (tests) and PostGIS (production)
     # backends.
     rtts_by_asset = {}
+    now = timezone.now()
     asset_ids = [a.pk for a in annotated_assets]
     if asset_ids:
         placeholders = ','.join(['%s'] * len(asset_ids))
         table_name = AssetRTT._meta.db_table
-        scan_cutoff = timezone.now() - RTT_SCAN_WINDOW
+        scan_cutoff = now - RTT_SCAN_WINDOW
         for rtt in AssetRTT.objects.raw(
             "SELECT * FROM (SELECT *, ROW_NUMBER() OVER (PARTITION BY asset_id ORDER BY timestamp DESC) AS rn "
             f"FROM {table_name} WHERE asset_id IN ({placeholders}) AND timestamp > %s) t WHERE rn <= %s "
@@ -311,6 +341,7 @@ def bulk_asset_status_data(assets):
                 search=latest['searches'].get(asset.pk),
                 rtts=rtts_by_asset.get(asset.pk, []),
                 command=latest['commands'].get(asset.pk),
+                now=now,
             )
         )
     return results
@@ -376,7 +407,7 @@ def _queue_destructive_command(asset_command, user, confirmation_token):
 
 
 @login_required_api
-def asset_command_set(request, asset_id):
+def asset_command_set(request, asset_id):  # pylint: disable=too-many-return-statements
     """
     Set the command for a given asset
     """
@@ -406,6 +437,11 @@ def asset_command_set(request, asset_id):
                     raise ValueError
             except (ValueError, TypeError):
                 return HttpResponseBadRequest('Invalid Altitude')
+        if not asset_has_live_connection(asset):
+            return HttpResponse(
+                "Asset is disconnected: no recent RTT response",
+                status=409,
+            )
         # @login_required_api guarantees an authenticated user here; guard
         # anyway so that decorator changing can't try to assign an AnonymousUser
         # to the FK. None keeps the command row, just without an attributed user.
