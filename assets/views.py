@@ -406,6 +406,16 @@ def _queue_destructive_command(asset_command, user, confirmation_token):
     return True
 
 
+def _command_parameter_error(parameters, command):
+    """Return the first command payload-contract error, if any."""
+    if command not in dict(AssetCommand.COMMAND_CHOICES):
+        return 'Invalid command'
+    unexpected_parameters = set(parameters) - AssetCommand.allowed_parameter_names(command)
+    if unexpected_parameters:
+        return f"Unexpected parameter(s): {', '.join(sorted(unexpected_parameters))}"
+    return None
+
+
 @login_required_api
 def asset_command_set(request, asset_id):  # pylint: disable=too-many-return-statements
     """
@@ -416,9 +426,9 @@ def asset_command_set(request, asset_id):  # pylint: disable=too-many-return-sta
         point = None
         altitude = None
         command = request.POST.get('command')
-        valid_commands = dict(AssetCommand.COMMAND_CHOICES)
-        if command not in valid_commands:
-            return HttpResponseBadRequest('Invalid command')
+        parameter_error = _command_parameter_error(request.POST, command)
+        if parameter_error is not None:
+            return HttpResponseBadRequest(parameter_error)
         if command in AssetCommand.REQUIRES_POSITION:
             latitude = request.POST.get('latitude')
             longitude = request.POST.get('longitude')

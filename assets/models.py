@@ -116,6 +116,18 @@ class AssetCommand(models.Model):
     ALTITUDE_MAX_FT = 999
     altitude = models.IntegerField(null=True, blank=True)
 
+    @classmethod
+    def allowed_parameter_names(cls, command):
+        """Return the complete POST parameter contract for a command."""
+        parameter_names = {'command'}
+        if command in cls.REQUIRES_POSITION:
+            parameter_names.update(('latitude', 'longitude'))
+        if command in cls.REQUIRES_ALTITUDE:
+            parameter_names.add('altitude')
+        if command in cls.DESTRUCTIVE_COMMANDS:
+            parameter_names.add('confirmation_token')
+        return parameter_names
+
     # Who dispatched this command, recorded for the audit trail of a
     # safety-critical action (a TERM/DISARM can destroy the aircraft). NULL when
     # the row was not created by an authenticated web user (e.g. rows predating
