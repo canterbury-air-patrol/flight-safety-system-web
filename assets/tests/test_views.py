@@ -344,6 +344,37 @@ class AssetAPITest(TestCase):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.content.decode(), 'Invalid command')
 
+    def test_asset_command_set_rejects_unexpected_parameters(self):
+        """Parameters outside each command's contract are rejected, not ignored."""
+        self.client.force_login(self.user)
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        cases = (
+            ({'command': 'RTL', 'latitude': -43.0, 'longitude': 172.0},
+             'Unexpected parameter(s): latitude, longitude'),
+            ({'command': 'GOTO', 'latitude': -43.0, 'longitude': 172.0, 'altitude': 100},
+             'Unexpected parameter(s): altitude'),
+            ({'command': 'ALT', 'altitude': 100, 'latitude': -43.0},
+             'Unexpected parameter(s): latitude'),
+        )
+
+        for payload, expected_error in cases:
+            with self.subTest(command=payload['command']):
+                response = self.client.post(url, payload)
+                self.assertEqual(response.status_code, 400)
+                self.assertEqual(response.content.decode(), expected_error)
+                self.assertFalse(AssetCommand.objects.exists())
+
+        token = self._issue_confirmation('TERM')
+        response = self.client.post(url, {
+            'command': 'TERM',
+            'confirmation_token': token,
+            'altitude': 100,
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.content.decode(), 'Unexpected parameter(s): altitude')
+        self.assertFalse(AssetCommand.objects.exists())
+        self.assertTrue(AssetCommandConfirmation.objects.filter(token=token).exists())
+
     @satisfies('TC-WEB-012')
     def test_asset_command_set_invalid_altitude(self):
         """Test setting an invalid altitude."""
