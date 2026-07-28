@@ -10,6 +10,10 @@
 - **Operator session expiry** — authenticated sessions now use an eight-hour request-sliding lifetime and a browser-session cookie. Expired sessions receive the API's authentication `403` and cannot create commands.
 - **Login failure throttling** — each server now temporarily locks a submitted username after five failed authentications in a rolling 15-minute window. Lockout responses remain indistinguishable from invalid credentials, retries do not extend the lockout, and operators can inspect or clear attempts through Django Axes.
 
+### Performance / Operations
+
+- **Aligned telemetry retention** — operators can opt position, status, RTT, and search-progress tables into independent age limits while preserving a shared recent per-asset timeline (24 hours by default). The management command supports dry runs and batched deletion, with opt-in daily Compose and systemd automation; command and audit records remain untouched.
+
 ## 1.0.0 — 2026-05-17
 
 First production release.
