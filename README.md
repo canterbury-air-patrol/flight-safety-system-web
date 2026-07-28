@@ -4,14 +4,18 @@ The web frontend for [Flight Safety System](https://github.com/canterbury-air-pa
 
 ## Deployment Requirements
 
-These requirements apply to **all** install paths.
+These requirements apply to **all production and operational** install paths.
+The Docker quickstart also provides an explicit plain-HTTP mode for local
+development and evaluation on the Docker host. That mode must never be used
+for operational deployment.
 
-### HTTPS is mandatory
+### HTTPS is mandatory in production
 
-All FSS web instances **must** be served over HTTPS. Session and CSRF cookies
-are marked `Secure` in production (`SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`),
-so they will not be transmitted over plain HTTP at all. Serving any instance
-over HTTP means operators cannot log in and no commands can be sent.
+All production FSS web instances **must** be served over HTTPS. Session and
+CSRF cookies are marked `Secure` in production (`SESSION_COOKIE_SECURE`,
+`CSRF_COOKIE_SECURE`), so they will not be transmitted over plain HTTP at all.
+Serving a production instance over HTTP means operators cannot log in and no
+commands can be sent.
 
 ### Operator sessions expire after eight hours
 
@@ -77,11 +81,11 @@ command dispatch — not just polling — work between peers.
 
 ---
 
-## Installing with Docker (recommended for production)
+## Installing with Docker
 
 ### Prerequisites
 
-- Docker and docker-compose
+- Docker with Docker Compose
 
 ### Steps
 
@@ -103,30 +107,82 @@ command dispatch — not just polling — work between peers.
    python3 -c "import secrets; print(secrets.token_urlsafe(50))"
    ```
 
-   For a single-server deployment, set:
+3. **Choose one access mode.**
 
+   ### Local development or evaluation over HTTP
+
+   This mode is only for a browser running on the Docker host. The raw web port
+   is bound to `127.0.0.1`, and both secure-cookie settings must be deliberately
+   disabled in `.env`:
+
+   ```dotenv
+   ALLOWED_HOSTS=localhost
+   CSRF_TRUSTED_ORIGINS=
+   CORS_ALLOWED_ORIGINS=
+   SESSION_COOKIE_SECURE=false
+   CSRF_COOKIE_SECURE=false
+   SECURE_HSTS_SECONDS=0
    ```
+
+   Start the base stack:
+
+   ```bash
+   docker compose up -d
+   ```
+
+   Open `http://localhost:8090`. Never use these cookie overrides for a
+   production or operational instance.
+
+   ### Production with the example HTTPS proxy
+
+   The optional Compose file runs nginx in front of the application, redirects
+   port 80 to HTTPS, and accepts operator-provided certificate files. Obtain a
+   certificate whose names cover the deployment hostname, keep its private key
+   out of version control, and set the production values in `.env`:
+
+   ```dotenv
    ALLOWED_HOSTS=fss.example.com
    CSRF_TRUSTED_ORIGINS=https://fss.example.com
    CORS_ALLOWED_ORIGINS=
+   SESSION_COOKIE_SECURE=true
+   CSRF_COOKIE_SECURE=true
+   SECURE_HSTS_SECONDS=31536000
+   TLS_CERTIFICATE_PATH=./certs/fullchain.pem
+   TLS_PRIVATE_KEY_PATH=./certs/privkey.pem
    ```
 
-   For multi-server deployments, list all peer origins in `CORS_ALLOWED_ORIGINS`
-   (comma-separated, `https://` required):
+   The certificate must contain the complete chain expected by clients.
+   `TLS_PRIVATE_KEY_PATH` must name its matching unencrypted private key. Start
+   the stack with both Compose files:
 
+   ```bash
+   docker compose \
+     -f docker-compose.yaml \
+     -f docker-compose.tls.yaml \
+     up -d
    ```
+
+   Open `https://fss.example.com`. The application remains reachable over raw
+   HTTP only from the Docker host for diagnostics; port 443 is the production
+   entry point. Certificate renewal is the operator's responsibility. After
+   replacing either certificate file, reload it with:
+
+   ```bash
+   docker compose \
+     -f docker-compose.yaml \
+     -f docker-compose.tls.yaml \
+     restart tls-proxy
+   ```
+
+   For multi-server deployments, give each instance its own hostname and list
+   all peer origins in `CORS_ALLOWED_ORIGINS` (comma-separated, `https://`
+   required):
+
+   ```dotenv
    ALLOWED_HOSTS=fss1.example.com
    CSRF_TRUSTED_ORIGINS=https://fss1.example.com
    CORS_ALLOWED_ORIGINS=https://fss2.example.com,https://fss3.example.com
    ```
-
-3. **Start the stack**:
-
-   ```bash
-   docker-compose up -d
-   ```
-
-4. Access the UI at `http://localhost:8090` (put a TLS-terminating reverse proxy in front for production).
 
 ---
 
