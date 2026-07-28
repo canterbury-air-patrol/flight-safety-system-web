@@ -1,4 +1,5 @@
 venv/
+certs/
 node_modules/
 .git/
 fss/local_settings.py
