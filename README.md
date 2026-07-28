@@ -173,6 +173,103 @@ command dispatch — not just polling — work between peers.
 
 ---
 
+## Telemetry retention
+
+Position, status, RTT, and search-progress retention is disabled by default.
+Configure any combination of these settings with a non-negative number of
+days to opt individual tables into pruning:
+
+- `TELEMETRY_POSITION_RETENTION_DAYS`
+- `TELEMETRY_STATUS_RETENTION_DAYS`
+- `TELEMETRY_RTT_RETENTION_DAYS`
+- `TELEMETRY_SEARCH_PROGRESS_RETENTION_DAYS`
+
+Docker deployments set them in `.env`; direct installations set them in
+`fss/local_settings.py`. An empty or `None` table value leaves that table
+disabled. Zero days makes all rows before the command's start time eligible,
+subject to the aligned-window safeguard.
+
+`TELEMETRY_ALIGNED_WINDOW_HOURS` defaults to 24. For each asset, cleanup finds
+the newest timestamp present in any of the four telemetry tables. Every
+enabled table then preserves the same trailing window before that timestamp,
+even when its normal age limit is shorter. A row is deleted only when it is
+strictly older than both the table age cutoff and the asset's aligned-window
+cutoff, so rows exactly on either effective boundary survive. Set the aligned
+window to `0` to disable this safeguard and enforce only table age limits.
+
+The aligned window cannot create missing samples: if a table has no rows in
+the protected interval, it remains empty there. `AssetCommand`, destructive
+command confirmations, and other audit data are never pruned by this command.
+
+### Review and run cleanup manually
+
+Pruning permanently deletes data; there is no archive or undo. Export any
+history required for incident investigation before enabling it. Always review
+the counts first:
+
+```bash
+# Docker (the web service must be running)
+docker compose exec web ./manage.py prune_telemetry --dry-run
+
+# Direct/venv installation
+venv/bin/python manage.py prune_telemetry --dry-run
+```
+
+Remove `--dry-run` to delete the reported rows. The default delete batch is
+1,000 rows; use `--batch-size N` to tune transaction size:
+
+```bash
+venv/bin/python manage.py prune_telemetry --batch-size 500
+```
+
+The command reports a count for every enabled table and a total. Invalid,
+negative, or empty aligned-window values and invalid or negative table limits
+stop the command without pruning.
+
+### Enable daily Docker cleanup
+
+The `telemetry-maintenance` service is behind an opt-in Compose profile. After
+setting at least one retention limit in `.env`, recreate `web` so manual runs
+receive the settings and enable the profile:
+
+```bash
+docker compose up -d --force-recreate web
+docker compose --profile maintenance up -d telemetry-maintenance
+```
+
+The maintenance container prunes immediately when it starts and then every 24
+hours. Inspect its reports with:
+
+```bash
+docker compose logs telemetry-maintenance
+```
+
+Disable automatic cleanup with:
+
+```bash
+docker compose --profile maintenance stop telemetry-maintenance
+```
+
+### Enable the persistent systemd timer
+
+For a direct installation, first edit the example user and paths in
+`fss-telemetry-prune.service`, then install both units:
+
+```bash
+sudo cp fss-telemetry-prune.service fss-telemetry-prune.timer /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now fss-telemetry-prune.timer
+systemctl list-timers fss-telemetry-prune.timer
+```
+
+The oneshot service uses the same `fss/local_settings.py` as the web service
+and is restricted to the filesystem, capabilities, devices, namespaces, and
+address families it needs. The timer is persistent: if the host is off at the
+scheduled daily run, systemd starts the missed job after boot. Review runs
+with `journalctl -u fss-telemetry-prune.service`.
+
+---
+
 ## Authors
 See the list of [contributors](https://github.com/canterbury-air-patrol/flight-safety-system-web/contributors).
 

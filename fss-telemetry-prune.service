@@ -1,0 +1,35 @@
+[Unit]
+Description=Prune Flight-Safety-System telemetry
+Requires=postgresql.service
+After=postgresql.service
+
+[Service]
+Type=oneshot
+# User=cap and the /home/cap/... paths below are example-specific to this
+# deployment; adjust the user and paths for your own install location.
+User=cap
+WorkingDirectory=/home/cap/software/flight-safety-system-web
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/usr/bin/env venv/bin/python manage.py prune_telemetry
+
+# This job needs database access and read access to the application settings,
+# but no elevated capabilities or writable application filesystem.
+CapabilityBoundingSet=
+LockPersonality=true
+MemoryDenyWriteExecute=true
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=read-only
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+RestrictNamespaces=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+UMask=0077
