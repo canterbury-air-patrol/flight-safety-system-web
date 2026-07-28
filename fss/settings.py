@@ -43,6 +43,15 @@ globals().setdefault('SESSION_COOKIE_AGE', 8 * 60 * 60)
 globals().setdefault('SESSION_SAVE_EVERY_REQUEST', True)
 globals().setdefault('SESSION_EXPIRE_AT_BROWSER_CLOSE', True)
 
+# Telemetry retention is opt-in per table. A deployment can give each telemetry
+# stream a different age limit, while the aligned window prevents cleanup from
+# removing one stream's history from the newest shared per-asset timeline.
+globals().setdefault('TELEMETRY_POSITION_RETENTION_DAYS', None)
+globals().setdefault('TELEMETRY_STATUS_RETENTION_DAYS', None)
+globals().setdefault('TELEMETRY_RTT_RETENTION_DAYS', None)
+globals().setdefault('TELEMETRY_SEARCH_PROGRESS_RETENTION_DAYS', None)
+globals().setdefault('TELEMETRY_ALIGNED_WINDOW_HOURS', 24)
+
 
 def merge_csrf_trusted_origins(csrf_trusted, cors_allowed):
     """

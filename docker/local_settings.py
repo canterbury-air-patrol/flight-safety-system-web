@@ -68,6 +68,15 @@ CORS_ALLOWED_ORIGINS = [
     if o.strip()
 ]
 
+# Empty table-specific values leave retention disabled for that telemetry
+# stream. Values are validated by the prune_telemetry management command so a
+# configuration error cannot silently select an unintended deletion window.
+TELEMETRY_POSITION_RETENTION_DAYS = os.environ.get('TELEMETRY_POSITION_RETENTION_DAYS') or None
+TELEMETRY_STATUS_RETENTION_DAYS = os.environ.get('TELEMETRY_STATUS_RETENTION_DAYS') or None
+TELEMETRY_RTT_RETENTION_DAYS = os.environ.get('TELEMETRY_RTT_RETENTION_DAYS') or None
+TELEMETRY_SEARCH_PROGRESS_RETENTION_DAYS = os.environ.get('TELEMETRY_SEARCH_PROGRESS_RETENTION_DAYS') or None
+TELEMETRY_ALIGNED_WINDOW_HOURS = os.environ.get('TELEMETRY_ALIGNED_WINDOW_HOURS', '24')
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.contrib.gis.db.backends.postgis',
