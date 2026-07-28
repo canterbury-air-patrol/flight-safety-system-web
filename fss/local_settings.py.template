@@ -29,6 +29,17 @@ CSRF_COOKIE_SECURE = True
 SESSION_COOKIE_SAMESITE = 'Lax'
 CSRF_COOKIE_SAMESITE = 'Lax'
 
+# Telemetry retention is disabled until at least one table limit is set to a
+# non-negative number of days. See the README before enabling destructive
+# cleanup and use prune_telemetry --dry-run to review the effect.
+TELEMETRY_POSITION_RETENTION_DAYS = None
+TELEMETRY_STATUS_RETENTION_DAYS = None
+TELEMETRY_RTT_RETENTION_DAYS = None
+TELEMETRY_SEARCH_PROGRESS_RETENTION_DAYS = None
+# Keep each asset's newest shared telemetry timeline aligned across all tables.
+# Set this to 0 to disable the safeguard.
+TELEMETRY_ALIGNED_WINDOW_HOURS = 24
+
 # HSTS: enable once the instance is served over HTTPS behind a trusted reverse
 # proxy. Only set SECURE_PROXY_SSL_HEADER when that proxy strips and re-sets
 # X-Forwarded-Proto, otherwise clients can forge it and Django will treat HTTP
