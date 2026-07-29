@@ -4,6 +4,7 @@
 
 ### Security
 
+- **Legacy API surface removed** — `/servers.json`, `/current_user/`, and `/assets/{id}/status.json` now return `404`. Their user, server, and asset status data remains available through the authenticated bulk status endpoint.
 - **Server-side destructive-command confirmation** — `DISARM` and `TERM` now require a 60-second, single-use confirmation token bound to the authenticated user, asset, and exact command. Multi-server clients prepare and consume an independent token on each peer, and direct or replayed command submissions are rejected without creating a command.
 - **Strict command payload contract** — command submissions now return `400` when they contain fields that do not apply to the selected command, instead of silently discarding them. Rejected destructive-command payloads do not consume their confirmation token.
 - **Disconnected-asset command block** — command submission now requires a per-asset RTT response no more than 60 seconds old. The backend returns `409` without creating a command when that liveness proof is absent; the frontend disables controls with no live target and skips and reports unreachable, unauthenticated, or asset-disconnected peers.
