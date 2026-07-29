@@ -22,25 +22,6 @@ def main_view(request):
 
 
 @login_required_api
-def server_list(request):
-    """
-    Return the active servers as a json array
-    """
-    servers = ServerConfig.objects.filter(active=True)
-    servers_list = []
-    for server in servers:
-        server_details = {
-            'name': server.name,
-            'address': server.address,
-            'client_port': server.client_port,
-            'url': server.http_address(),
-        }
-        servers_list.append(server_details)
-
-    return JsonResponse({'servers': servers_list})
-
-
-@login_required_api
 def asset_list(request):
     """
     Return the know assets as a json array
@@ -57,14 +38,6 @@ def asset_list(request):
             'smm_login': config.smm_login if config else None,
         })
     return JsonResponse({'assets': assets_list})
-
-
-def current_user(request):
-    """
-    Return the current user, helps determine if the client is logged in
-    """
-    user = request.user.username if request.user.is_authenticated else None
-    return JsonResponse({'currentUser': user})
 
 
 @ensure_csrf_cookie

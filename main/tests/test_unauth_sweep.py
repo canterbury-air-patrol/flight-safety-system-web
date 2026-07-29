@@ -13,16 +13,12 @@ from assets.models import Asset, AssetCommand
 from fss.satisfies import satisfies
 
 # Endpoints deliberately reachable without authentication: the SPA shell (its
-# auth-gated data is fetched separately via JS), the login flow itself, and
-# current_user - a deliberate auth probe returning null when logged out (see
-# chore-02-remove-unused-api-endpoints.md, which flags it as unused/worth
-# reviewing on its own merits - that's a separate decision from this sweep).
+# auth-gated data is fetched separately via JS) and the login flow itself.
 PUBLIC_URL_NAMES = {
     'main_view',
     'assets_main',
     'config_main',
     'login_page',
-    'current_user',
 }
 
 # django.contrib.admin and django.contrib.auth's own URLs (password reset
