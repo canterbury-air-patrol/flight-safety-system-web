@@ -49,6 +49,28 @@ describe('disconnected asset command controls', () => {
   })
 })
 
+describe('asset command rendering', () => {
+  it('shows GOTO coordinates when latitude and longitude are exactly zero', () => {
+    const servers = { [SERVER_KEY]: makeServer() }
+    const status: AssetStatus = {
+      ...cannedAssetStatus(true),
+      command: {
+        timestamp: new Date(SERVER_NOW).toISOString(),
+        command: 'Goto Position',
+        command_code: 'GOTO',
+        lat: 0,
+        lng: 0,
+        ack_state: 'actioned'
+      }
+    }
+    const asset = mergeServerAssets({}, SERVER_KEY, 'alpha', [status], SERVER_NOW).Drone
+
+    render(<FSSAsset asset={asset} knownServers={servers} setSelected={vi.fn()} />)
+
+    expect(screen.getByText('Goto Position 0 0.000 N, 0 0.000 E')).toBeTruthy()
+  })
+})
+
 describe('FSS server redundancy status', () => {
   it('reports nominal status when at least two FSS servers are reachable', () => {
     render(<FSSServerBar knownServers={[makeServer('alpha'), makeServer('beta')]} />)
