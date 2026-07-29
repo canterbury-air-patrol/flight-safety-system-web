@@ -448,10 +448,18 @@ interface FSSServerBarProps {
   knownServers: ServerState[]
 }
 
-function FSSServerBar(props: FSSServerBarProps) {
+export function FSSServerBar(props: FSSServerBarProps) {
   const { knownServers } = props
+  const reachableServers = knownServers.filter((server) => server.connected).length
+  const redundancyLost = reachableServers < 2
+  const serverNoun = reachableServers === 1 ? 'server' : 'servers'
   return (
     <div className="bar-server">
+      <div className={`alert ${redundancyLost ? 'alert-danger' : 'alert-success'} system-status`} role="status">
+        <strong>Systems: {redundancyLost ? 'Critical' : 'Nominal'}</strong>
+        {' — '}
+        {redundancyLost ? `Redundancy lost: ${reachableServers} FSS ${serverNoun} reachable; 2 required` : `${reachableServers} FSS ${serverNoun} reachable`}
+      </div>
       {knownServers.map((server) => (
         <FSSServer key={server.url} server={server} />
       ))}

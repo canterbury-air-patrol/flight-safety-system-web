@@ -5,14 +5,14 @@ import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { mergeServerAssets } from './asset'
-import { FSSAsset } from './fss-main-page'
-import { AssetStatus, ServerState, createServer } from './server'
+import { FSSAsset, FSSServerBar } from './fss-main-page'
+import { AssetStatus, ServerState, createServer, serverConnectFailed } from './server'
 
 const SERVER_KEY = 'https://alpha.example'
 const SERVER_NOW = 1_700_000_000_000
 
-const makeServer = (): ServerState => ({
-  ...createServer('alpha', '10.0.0.1', 8080, SERVER_KEY),
+const makeServer = (name = 'alpha'): ServerState => ({
+  ...createServer(name, `10.0.0.${name === 'alpha' ? '1' : '2'}`, 8080, `https://${name}.example`),
   connected: true,
   userName: 'pilot',
   csrfToken: 'csrf-123'
@@ -46,5 +46,36 @@ describe('disconnected asset command controls', () => {
 
     expect(screen.queryByRole('status')).toBeNull()
     expect((screen.getByRole('button', { name: 'RTL' }) as HTMLButtonElement).disabled).toBe(false)
+  })
+})
+
+describe('FSS server redundancy status', () => {
+  it('reports nominal status when at least two FSS servers are reachable', () => {
+    render(<FSSServerBar knownServers={[makeServer('alpha'), makeServer('beta')]} />)
+
+    expect(screen.getByRole('status').textContent).toBe('Systems: Nominal — 2 FSS servers reachable')
+  })
+
+  // satisfies: TC-WEB-015
+  it('reports critical status and identifies an unreachable server when redundancy is lost', () => {
+    const offline = serverConnectFailed(makeServer('beta'))
+
+    render(<FSSServerBar knownServers={[makeServer('alpha'), offline]} />)
+
+    expect(screen.getByRole('status').textContent).toBe('Systems: Critical — Redundancy lost: 1 FSS server reachable; 2 required')
+    expect(screen.getByText('beta').classList.contains('server-label-failure')).toBe(true)
+    expect(screen.getByText('Unreachable')).toBeTruthy()
+  })
+
+  it('reports critical status when only one server is configured and reachable', () => {
+    render(<FSSServerBar knownServers={[makeServer('alpha')]} />)
+
+    expect(screen.getByRole('status').textContent).toContain('Systems: Critical')
+  })
+
+  it('reports critical status when no servers are reachable', () => {
+    render(<FSSServerBar knownServers={[serverConnectFailed(makeServer('alpha')), serverConnectFailed(makeServer('beta'))]} />)
+
+    expect(screen.getByRole('status').textContent).toBe('Systems: Critical — Redundancy lost: 0 FSS servers reachable; 2 required')
   })
 })
