@@ -37,6 +37,12 @@ class AssetAPITest(TestCase):
         self.assertEqual(response.status_code, 200)
         return response.json()['confirmation_token']
 
+    def _get_asset_status(self, asset=None):
+        target_asset = asset or self.asset
+        response = self.client.get(reverse('all_status_data'))
+        self.assertEqual(response.status_code, 200)
+        return next(data for data in response.json()['assets'] if data['asset']['pk'] == target_asset.pk)
+
     def test_asset_command_set_unauthenticated(self):
         """Test that unauthenticated command attempts are rejected."""
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
@@ -67,7 +73,7 @@ class AssetAPITest(TestCase):
             expire_date=previous_expiry,
         )
 
-        status_url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
+        status_url = reverse('all_status_data')
         activity_time = timezone.now()
         response = self.client.get(status_url)
 
@@ -186,8 +192,7 @@ class AssetAPITest(TestCase):
         cmd = AssetCommand.objects.filter(asset=self.asset).latest('timestamp')
         self.assertEqual(cmd.issued_by, self.user)
 
-        status_url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
-        data = self.client.get(status_url).json()
+        data = self._get_asset_status()
         self.assertEqual(data['command']['issued_by'], 'testuser')
 
     @satisfies('TC-WEB-010')
@@ -438,41 +443,28 @@ class AssetAPITest(TestCase):
         response = self.client.post(url, {'command': 'ALT'})
         self.assertEqual(response.status_code, 400)
 
-    def test_asset_status_json_unauthenticated(self):
-        """Test asset_status_json rejects unauthenticated requests."""
-        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 403)
-
-    def test_asset_status_json_success(self):
-        """Test asset_status_json for a valid asset."""
+    def test_all_status_data_includes_asset(self):
+        """The bulk status endpoint includes the requested asset's status."""
         self.client.force_login(self.user)
-        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = self._get_asset_status()
         self.assertEqual(data['asset']['name'], 'Test Drone')
         self.assertTrue(data['connected'])
 
-    def test_asset_status_json_command_code(self):
-        """Test that asset_status_json includes command_code alongside the display string."""
+    def test_all_status_data_command_code(self):
+        """The bulk status endpoint includes command_code alongside the display string."""
         self.client.force_login(self.user)
         AssetCommand.objects.create(asset=self.asset, command='RTL')
-        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
-        response = self.client.get(url)
-        data = response.json()
+        data = self._get_asset_status()
         self.assertEqual(data['command']['command_code'], 'RTL')
         self.assertEqual(data['command']['command'], 'Return to Launch')
 
-    def test_asset_status_json_formatted_details(self):
+    def test_all_status_data_formatted_details(self):
         """The response carries formatted position, battery and search data."""
         self.client.force_login(self.user)
         AssetPosition.objects.create(asset=self.asset, position=Point(172.0, -43.0), altitude=120)
         AssetStatus.objects.create(asset=self.asset, bat_percent=85, bat_used_mah=500, bat_volt=11.1)
         AssetSearchProgress.objects.create(asset=self.asset, search=7, search_progress=3, search_progress_of=10)
-        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
-        response = self.client.get(url)
-        data = response.json()
+        data = self._get_asset_status()
 
         self.assertEqual(data['position']['lat'], -43.0)
         self.assertEqual(data['position']['lng'], 172.0)
@@ -486,31 +478,27 @@ class AssetAPITest(TestCase):
         self.assertEqual(data['search']['progress'], 3)
         self.assertEqual(data['search']['total'], 10)
 
-    def test_asset_status_json_ack_pending(self):
+    def test_all_status_data_ack_pending(self):
         """A dispatched-but-unacked command reports ack_state 'pending'."""
         self.client.force_login(self.user)
         AssetCommand.objects.create(asset=self.asset, command='RTL')
-        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
-        response = self.client.get(url)
-        data = response.json()
+        data = self._get_asset_status()
         self.assertEqual(data['command']['ack_state'], 'pending')
         self.assertNotIn('ack_timestamp', data['command'])
 
-    def test_asset_status_json_ack_actioned(self):
+    def test_all_status_data_ack_actioned(self):
         """An actioned ack is surfaced with its code, label and timestamp."""
         self.client.force_login(self.user)
         AssetCommand.objects.create(
             asset=self.asset, command='RTL',
             ack_state=AssetCommand.ACK_ACTIONED, ack_timestamp=1700000000000,
         )
-        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
-        response = self.client.get(url)
-        data = response.json()
+        data = self._get_asset_status()
         self.assertEqual(data['command']['ack_state'], 'actioned')
         self.assertEqual(data['command']['ack_state_display'], 'Actioned')
         self.assertEqual(data['command']['ack_timestamp'], 1700000000000)
 
-    def test_asset_status_json_ack_superseded(self):
+    def test_all_status_data_ack_superseded(self):
         """A superseded ack carries the supersede reason as a code string."""
         self.client.force_login(self.user)
         AssetCommand.objects.create(
@@ -518,13 +506,11 @@ class AssetAPITest(TestCase):
             ack_state=AssetCommand.ACK_SUPERSEDED,
             ack_superseded_by=AssetCommand.SUPERSEDE_LOW_BATTERY,
         )
-        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
-        response = self.client.get(url)
-        data = response.json()
+        data = self._get_asset_status()
         self.assertEqual(data['command']['ack_state'], 'superseded')
         self.assertEqual(data['command']['ack_superseded_by'], 'low_battery')
 
-    def test_asset_status_json_ack_superseded_newer_command(self):
+    def test_all_status_data_ack_superseded_newer_command(self):
         """A command superseded by a newer command reports that reason code."""
         self.client.force_login(self.user)
         AssetCommand.objects.create(
@@ -532,39 +518,25 @@ class AssetAPITest(TestCase):
             ack_state=AssetCommand.ACK_SUPERSEDED,
             ack_superseded_by=AssetCommand.SUPERSEDE_NEWER_COMMAND,
         )
-        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
-        response = self.client.get(url)
-        data = response.json()
+        data = self._get_asset_status()
         self.assertEqual(data['command']['ack_state'], 'superseded')
         self.assertEqual(data['command']['ack_superseded_by'], 'newer_command')
 
-    def test_asset_status_json_ack_noop(self):
+    def test_all_status_data_ack_noop(self):
         """A noop ack (already-current state) reports ack_state 'noop'."""
         self.client.force_login(self.user)
         AssetCommand.objects.create(
             asset=self.asset, command='RTL', ack_state=AssetCommand.ACK_NOOP,
         )
-        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
-        response = self.client.get(url)
-        data = response.json()
+        data = self._get_asset_status()
         self.assertEqual(data['command']['ack_state'], 'noop')
         self.assertEqual(data['command']['ack_state_display'], 'No change')
-
-    def test_asset_status_json_not_found(self):
-        """Test asset_status_json for a non-existent asset."""
-        self.client.force_login(self.user)
-        url = reverse('asset_status_json', kwargs={'asset_id': 99999})
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 404)
 
     def test_asset_status_no_data(self):
         """Test an asset with no status/position/rtt data."""
         self.client.force_login(self.user)
         asset = Asset.objects.create(name='Empty Drone')
-        url = reverse('asset_status_json', kwargs={'asset_id': asset.pk})
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
+        data = self._get_asset_status(asset)
         self.assertEqual(data['asset']['name'], 'Empty Drone')
         self.assertFalse(data['connected'])
         self.assertNotIn('position', data)
@@ -579,9 +551,7 @@ class AssetAPITest(TestCase):
         for i in range(1, total_samples + 1):
             AssetRTT.objects.create(asset=self.asset, rtt=i)
 
-        url = reverse('asset_status_json', kwargs={'asset_id': self.asset.pk})
-        response = self.client.get(url)
-        data = response.json()
+        data = self._get_asset_status()
 
         rtt_data = data['rtt']
         self.assertEqual(rtt_data['rtt_max'], total_samples)

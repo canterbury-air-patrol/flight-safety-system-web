@@ -2,11 +2,10 @@
 Views for Assets
 """
 
-import contextlib
 from datetime import timedelta
 
 from django.contrib.gis.geos import Point
-from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.db.models import OuterRef, Subquery
 from django.http import HttpResponse, HttpResponseBadRequest, JsonResponse
@@ -222,42 +221,6 @@ def format_asset_status(asset, position=None, status=None, search=None, rtts=Non
     return data
 
 
-def asset_status_data(asset):
-    """
-    Get all the current status data for an asset (single-asset, DB-backed).
-    """
-    position = status = search = command = None
-    rtts = []
-
-    with contextlib.suppress(ObjectDoesNotExist):
-        position = AssetPosition.objects.filter(asset=asset).latest('timestamp')
-
-    with contextlib.suppress(ObjectDoesNotExist):
-        status = AssetStatus.objects.filter(asset=asset).latest('timestamp')
-
-    with contextlib.suppress(ObjectDoesNotExist):
-        search = AssetSearchProgress.objects.filter(asset=asset).latest('timestamp')
-
-    with contextlib.suppress(IndexError):
-        rtts = list(
-            AssetRTT.objects.filter(asset=asset)
-            .order_by('-timestamp')[:RTT_SAMPLE_LIMIT]
-        )
-
-    with contextlib.suppress(ObjectDoesNotExist):
-        command = AssetCommand.objects.filter(asset=asset).select_related('issued_by').latest('timestamp')
-
-    return format_asset_status(
-        asset,
-        position=position,
-        status=status,
-        search=search,
-        rtts=rtts,
-        command=command,
-        now=timezone.now(),
-    )
-
-
 def bulk_asset_status_data(assets):
     """
     Get current status data for a list of assets efficiently.
@@ -345,16 +308,6 @@ def bulk_asset_status_data(assets):
             )
         )
     return results
-
-
-@login_required_api
-def asset_status_json(request, asset_id):
-    """
-    Show the current asset status
-    """
-    asset = get_object_or_404(Asset, pk=asset_id)
-
-    return JsonResponse(asset_status_data(asset))
 
 
 @login_required_api

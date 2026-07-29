@@ -116,36 +116,13 @@ class StatusAPITest(TestCase):
 
         self.assertIsNone(data['assets'][0]['status']['battery_voltage'])
 
-    def test_current_user_unauthenticated(self):
-        """Test current_user when not logged in."""
-        url = reverse('current_user')
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        self.assertIsNone(response.json()['currentUser'])
-
-    def test_current_user_authenticated(self):
-        """Test current_user when logged in."""
+    def test_legacy_api_endpoints_are_removed(self):
+        """Legacy endpoints stay outside the authenticated API surface."""
         self.client.login(username='testuser', password='password')
-        url = reverse('current_user')
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json()['currentUser'], 'testuser')
-
-    def test_server_list_unauthenticated(self):
-        """Test server_list rejects unauthenticated requests."""
-        url = reverse('server_list')
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 403)
-
-    def test_server_list_authenticated(self):
-        """Test server_list returns data when logged in."""
-        self.client.login(username='testuser', password='password')
-        url = reverse('server_list')
-        response = self.client.get(url)
-        self.assertEqual(response.status_code, 200)
-        data = response.json()
-        self.assertEqual(len(data['servers']), 1)
-        self.assertEqual(data['servers'][0]['name'], 'Test Server')
+        for path in ('/servers.json', '/current_user/', f'/assets/{self.asset.pk}/status.json'):
+            with self.subTest(path=path):
+                response = self.client.get(path)
+                self.assertEqual(response.status_code, 404)
 
     def test_asset_list_unauthenticated(self):
         """Test asset_list rejects unauthenticated requests."""
