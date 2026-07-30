@@ -8,9 +8,9 @@ services:
         condition: service_healthy
     environment:
       - DB_HOST=db
-      - DB_USER=${DB_USER}
-      - DB_NAME=${DB_NAME}
-      - DB_PASS=${DB_PASS}
+      - DB_USER=${DB_USER:?Set DB_USER in .env}
+      - DB_NAME=${DB_NAME:?Set DB_NAME in .env}
+      - DB_PASS=${DB_PASS:?Set DB_PASS in .env}
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - DJANGO_SUPERUSER_USERNAME=${DJANGO_SUPERUSER_USERNAME}
       - DJANGO_SUPERUSER_PASSWORD=${DJANGO_SUPERUSER_PASSWORD}
@@ -38,9 +38,9 @@ services:
     restart: unless-stopped
     environment:
       - DB_HOST=db
-      - DB_USER=${DB_USER}
-      - DB_NAME=${DB_NAME}
-      - DB_PASS=${DB_PASS}
+      - DB_USER=${DB_USER:?Set DB_USER in .env}
+      - DB_NAME=${DB_NAME:?Set DB_NAME in .env}
+      - DB_PASS=${DB_PASS:?Set DB_PASS in .env}
       - DJANGO_SECRET_KEY=${DJANGO_SECRET_KEY}
       - TELEMETRY_POSITION_RETENTION_DAYS=${TELEMETRY_POSITION_RETENTION_DAYS:-}
       - TELEMETRY_STATUS_RETENTION_DAYS=${TELEMETRY_STATUS_RETENTION_DAYS:-}
@@ -52,9 +52,10 @@ services:
   db:
     image: postgis/postgis:18-3.6-alpine
     environment:
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASS}
+      - POSTGRES_USER=${DB_USER:?Set DB_USER in .env}
+      - POSTGRES_DB=${DB_NAME:?Set DB_NAME in .env}
+      - POSTGRES_PASSWORD=${DB_PASS:?Set DB_PASS in .env}
     healthcheck:
-      test: "pg_isready --username=${DB_USER}"
+      test: ["CMD-SHELL", "pg_isready --username=\"$${POSTGRES_USER}\" --dbname=\"$${POSTGRES_DB}\""]
       timeout: 10s
       retries: 20
