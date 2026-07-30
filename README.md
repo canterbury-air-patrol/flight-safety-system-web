@@ -184,6 +184,22 @@ command dispatch — not just polling — work between peers.
    CORS_ALLOWED_ORIGINS=https://fss2.example.com,https://fss3.example.com
    ```
 
+### Verify a fresh Docker deployment
+
+Run the Compose smoke test after changing the image, entrypoint, database
+settings, or migrations:
+
+```bash
+./test-docker-compose.sh
+```
+
+The test renders the documented environment shape, checks that missing
+database settings fail interpolation, and starts an isolated Compose project
+with different database and user names. It then proves the web container
+completes migrations and serves an authenticated request. The temporary
+containers, network, and fresh database volume are removed when the test
+finishes; an existing Compose project is not used.
+
 ---
 
 ## Installing into a venv (for direct install / systemd service)
