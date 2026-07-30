@@ -134,3 +134,10 @@ jobs:
         run: |
           source venv/bin/activate
           ./manage.py test --settings=fss.test_settings_postgis
+
+  compose-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Test a fresh Docker Compose deployment
+        run: ./test-docker-compose.sh

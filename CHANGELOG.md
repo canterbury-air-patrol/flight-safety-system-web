@@ -16,6 +16,7 @@
 - **Push-ready command dispatch** — PostgreSQL now publishes committed command inserts on the `fss_command` channel with the asset ID as payload, enabling the FSS server to replace its bounded command poll with `LISTEN`/`NOTIFY` when its listener is implemented. Dispatch and acknowledgement updates do not notify.
 - **Aligned telemetry retention** — operators can opt position, status, RTT, and search-progress tables into independent age limits while preserving a shared recent per-asset timeline (24 hours by default). The management command supports dry runs and batched deletion, with opt-in daily Compose and systemd automation; command and audit records remain untouched.
 - **Executable Docker access modes** — local HTTP evaluation now requires explicit insecure-cookie overrides and remains bound to loopback, while an optional nginx Compose proxy provides the production HTTPS path with operator-managed certificates.
+- **Fresh-database Compose startup** — PostgreSQL now provisions the configured `DB_NAME`, readiness checks that exact database, and Compose rejects missing database credentials before startup. CI verifies migrations and an authenticated request against a fresh isolated volume with deliberately different database and user names.
 
 ## 1.0.0 — 2026-05-17
 
