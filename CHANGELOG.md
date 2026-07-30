@@ -13,6 +13,7 @@
 
 ### Performance / Operations
 
+- **Push-ready command dispatch** — PostgreSQL now publishes committed command inserts on the `fss_command` channel with the asset ID as payload, enabling the FSS server to replace its bounded command poll with `LISTEN`/`NOTIFY` when its listener is implemented. Dispatch and acknowledgement updates do not notify.
 - **Aligned telemetry retention** — operators can opt position, status, RTT, and search-progress tables into independent age limits while preserving a shared recent per-asset timeline (24 hours by default). The management command supports dry runs and batched deletion, with opt-in daily Compose and systemd automation; command and audit records remain untouched.
 - **Executable Docker access modes** — local HTTP evaluation now requires explicit insecure-cookie overrides and remains bound to loopback, while an optional nginx Compose proxy provides the production HTTPS path with operator-managed certificates.
 
