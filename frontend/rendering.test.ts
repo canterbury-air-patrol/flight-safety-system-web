@@ -13,6 +13,7 @@ import {
   commandAckOutcome,
   commandAckTimeout,
   dataAgeClass,
+  positionEstimateDeltaSeconds,
   supersededRtlInEffect
 } from './rendering'
 
@@ -88,6 +89,16 @@ describe('dataAgeClass', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('positionEstimateDeltaSeconds', () => {
+  it('reports the rounded interval after the last GPS-backed position', () => {
+    expect(positionEstimateDeltaSeconds(isoAt(12_400), isoAt(0))).toBe(12)
+  })
+
+  it('does not report a negative interval for reordered timestamps', () => {
+    expect(positionEstimateDeltaSeconds(isoAt(0), isoAt(1000))).toBe(0)
   })
 })
 

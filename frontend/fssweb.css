@@ -68,6 +68,7 @@ div.server-label-connected {
 }
 
 .asset-position-warn,
+.asset-position-estimate-warn,
 .asset-battery-time-warn,
 .asset-search-time-warn,
 .asset-rtt-time-warn {
@@ -77,12 +78,22 @@ div.server-label-connected {
 }
 
 .asset-position-old,
+.asset-position-estimate-old,
 .asset-battery-time-old,
 .asset-search-time-old,
 .asset-rtt-time-old {
   color: red;
   font-style: italic;
   opacity: 25%;
+}
+
+.asset-gps-warning {
+  margin: 0.5rem 0;
+}
+
+.asset-position-label {
+  font-weight: bold;
+  margin-top: 0.5rem;
 }
 
 .asset-battery-warn {

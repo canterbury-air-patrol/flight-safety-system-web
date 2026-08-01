@@ -44,6 +44,12 @@ export const dataAgeClass = (timestamp: string, old: number, warn: number, prefi
   return ''
 }
 
+// How far the dead-reckoned estimate has advanced in time beyond the last
+// GPS-backed position. Database receipt timestamps share one server clock, so
+// this comparison is immune to browser and aircraft clock skew.
+export const positionEstimateDeltaSeconds = (lastFixTimestamp: string, estimateTimestamp: string): number =>
+  Math.max(0, Math.round((new Date(estimateTimestamp).getTime() - new Date(lastFixTimestamp).getTime()) / 1000))
+
 // Label for the reason a command was superseded. The failsafe latches always
 // engage an RTL, so name those as such for the operator; a newer command
 // simply overrides the older one and is not an RTL.

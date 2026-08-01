@@ -5,6 +5,11 @@ export interface AssetPositionData {
   alt?: number
 }
 
+export interface AssetGPSData {
+  timestamp: string
+  fix_valid: boolean
+}
+
 export interface AssetStatusData {
   timestamp: string
   battery_percent: number
@@ -61,6 +66,11 @@ export interface AssetStatus {
   // command submission treats a missing value as disconnected.
   connected?: boolean
   position?: AssetPositionData
+  // The latest position report says whether coordinates are backed by GPS.
+  // During a no-fix period, position remains the last trusted GPS location and
+  // position_estimate carries the autopilot's current dead-reckoned estimate.
+  gps?: AssetGPSData
+  position_estimate?: AssetPositionData
   status?: AssetStatusData
   search?: AssetSearchData
   rtt?: AssetRTTData
