@@ -26,7 +26,7 @@ def asset_list(request):
     """
     Return the know assets as a json array
     """
-    assets = list(Asset.objects.all())
+    assets = list(Asset.objects.filter(retired_at__isnull=True))
     configs_by_asset_id = {c.asset_id: c for c in AssetConfig.objects.filter(asset__in=assets).select_related('smm')}
     assets_list = []
     for asset in assets:
@@ -85,7 +85,7 @@ def all_status_data(request):
         }
         data['servers'].append(server_details)
 
-    assets = Asset.objects.all()
+    assets = Asset.objects.filter(retired_at__isnull=True)
     data['assets'] = bulk_asset_status_data(assets)
 
     response = JsonResponse(data)

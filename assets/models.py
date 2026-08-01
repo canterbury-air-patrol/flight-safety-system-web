@@ -6,7 +6,19 @@ import uuid
 
 from django.conf import settings
 from django.contrib.gis.db import models
+from django.db.models.deletion import ProtectedError
 from django.utils import timezone
+
+
+class AssetQuerySet(models.QuerySet):
+    """Require assets to be retired instead of deleted through Django."""
+
+    def delete(self):
+        protected = list(self)
+        raise ProtectedError(
+            "Assets cannot be deleted; set retired_at instead.",
+            protected,
+        )
 
 
 class Asset(models.Model):
@@ -14,9 +26,23 @@ class Asset(models.Model):
     An asset
     """
     name = models.CharField(max_length=100, unique=True)
+    retired_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        db_index=True,
+        help_text="Retire this asset instead of deleting its identity and audit history.",
+    )
+
+    objects = AssetQuerySet.as_manager()
 
     def __str__(self):
         return f"Asset: {self.name}"
+
+    def delete(self, using=None, keep_parents=False):
+        raise ProtectedError(
+            "Assets cannot be deleted; set retired_at instead.",
+            [self],
+        )
 
 
 class AssetSearchProgress(models.Model):
@@ -96,7 +122,7 @@ class AssetCommand(models.Model):
     """
     Command for asset
     """
-    asset = models.ForeignKey(Asset, on_delete=models.CASCADE)
+    asset = models.ForeignKey(Asset, on_delete=models.PROTECT)
     timestamp = models.DateTimeField(default=timezone.now)
     COMMAND_CHOICES = (
         ('RTL', "Return to Launch"),

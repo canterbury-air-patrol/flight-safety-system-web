@@ -43,6 +43,18 @@ class StatusAPITest(TestCase):
         self.assertEqual(data['assets'][0]['asset']['name'], 'Test Drone')
         self.assertIn('csrfToken', data)
 
+    def test_retired_asset_is_hidden_from_active_endpoints(self):
+        """Retired identities leave status and asset-list responses."""
+        self.asset.retired_at = timezone.now()
+        self.asset.save(update_fields=['retired_at'])
+        self.client.force_login(self.user)
+
+        status_response = self.client.get(reverse('all_status_data'))
+        list_response = self.client.get(reverse('asset_list'))
+
+        self.assertEqual(status_response.json()['assets'], [])
+        self.assertEqual(list_response.json()['assets'], [])
+
     def test_all_status_data_server_now(self):
         """The status response carries the server's current time (epoch-ms)."""
         self.client.login(username='testuser', password='password')
