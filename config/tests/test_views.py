@@ -77,3 +77,20 @@ class ConfigViewTest(TestCase):
         self.assertEqual(entry['pk'], unconfigured.pk)
         self.assertIsNone(entry['smm_name'])
         self.assertIsNone(entry['smm_login'])
+
+    def test_config_data_json_reports_duplicate_asset_configs(self):
+        """Legacy conflicting rows are reported instead of silently collapsed."""
+        AssetConfig.objects.create(
+            asset=self.asset,
+            smm=self.smm_server,
+            smm_login='other-user',
+            smm_password='other-secret',
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('config_data_json'))
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['duplicate_asset_ids'], [self.asset.pk])
+        self.assertNotContains(response, 'pass', status_code=409)
+        self.assertNotContains(response, 'secret', status_code=409)

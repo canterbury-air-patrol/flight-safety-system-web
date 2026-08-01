@@ -168,6 +168,20 @@ class StatusAPITest(TestCase):
         self.assertEqual(entry['smm_name'], 'SMM Server')
         self.assertEqual(entry['smm_login'], 'operator')
 
+    def test_asset_list_reports_duplicate_asset_configs(self):
+        """Legacy conflicting rows produce an explicit configuration error."""
+        first_smm = SMMConfig.objects.create(name='First SMM', address='2.2.2.2')
+        second_smm = SMMConfig.objects.create(name='Second SMM', address='3.3.3.3')
+        AssetConfig.objects.create(asset=self.asset, smm=first_smm, smm_login='one', smm_password='first-secret')
+        AssetConfig.objects.create(asset=self.asset, smm=second_smm, smm_login='two', smm_password='second-secret')
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('asset_list'))
+
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json()['duplicate_asset_ids'], [self.asset.pk])
+        self.assertNotContains(response, 'secret', status_code=409)
+
     def test_main_view(self):
         """The landing page serves the React SPA and sets the CSRF cookie."""
         url = reverse('main_view')
