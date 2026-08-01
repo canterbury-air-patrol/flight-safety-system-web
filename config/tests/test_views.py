@@ -81,6 +81,19 @@ class ConfigViewTest(TestCase):
         self.assertIsNone(entry['smm_name'])
         self.assertIsNone(entry['smm_login'])
 
+    def test_multiple_assets_can_share_smm_config(self):
+        """The one-to-one asset link does not make the SMM server exclusive."""
+        other_asset = Asset.objects.create(name='Other configured drone')
+        other_config = AssetConfig.objects.create(
+            asset=other_asset,
+            smm=self.smm_server,
+            smm_login='other-user',
+            smm_password='other-password',
+        )
+
+        self.assertEqual(self.asset_config.smm, other_config.smm)
+        self.assertEqual(self.smm_server.assetconfig_set.count(), 2)
+
     def test_config_data_json_reports_duplicate_asset_configs(self):
         """Legacy conflicting rows are reported instead of silently collapsed."""
         self.client.force_login(self.user)
