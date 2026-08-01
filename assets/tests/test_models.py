@@ -5,12 +5,12 @@
 import uuid
 
 from django.contrib.auth import get_user_model
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, connection, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase
 from django.utils import timezone
 
-from assets.models import Asset, AssetCommand, AssetCommandAck
+from assets.models import Asset, AssetCommand, AssetCommandAck, AssetPosition
 
 
 class AssetLifecycleTest(TestCase):
@@ -75,6 +75,37 @@ class AssetLifecycleTest(TestCase):
             AssetCommand.objects.create(
                 asset=asset, command='MAN', operation_id=operation_id,
             )
+
+
+class AssetPositionGPSFixTest(TestCase):
+    """Position rows distinguish GPS fixes from untrusted estimates."""
+
+    def setUp(self):
+        self.asset = Asset.objects.create(name='Position asset')
+
+    def test_database_default_keeps_legacy_writer_positions_valid(self):
+        """A raw insert that omits gps_fix_valid remains deploy-compatible."""
+        with connection.cursor() as cursor:
+            cursor.execute(
+                'INSERT INTO assets_assetposition '
+                '(asset_id, timestamp, position, altitude) '
+                'VALUES (%s, %s, NULL, %s)',
+                [self.asset.pk, timezone.now(), 100],
+            )
+
+        position = AssetPosition.objects.get(asset=self.asset)
+        self.assertTrue(position.gps_fix_valid)
+
+    def test_no_fix_report_can_omit_position_estimate(self):
+        position = AssetPosition.objects.create(
+            asset=self.asset,
+            position=None,
+            altitude=100,
+            gps_fix_valid=False,
+        )
+
+        self.assertIsNone(position.position)
+        self.assertFalse(position.gps_fix_valid)
 
 
 class AssetCommandAckTest(TestCase):

@@ -90,8 +90,13 @@ class AssetPosition(models.Model):
     """
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE)
     timestamp = models.DateTimeField(default=timezone.now)
-    position = models.PointField(geography=True)
+    # A no-fix report can still carry the autopilot's dead-reckoned estimate.
+    # NULL is reserved for reports where even that estimate is unavailable.
+    position = models.PointField(geography=True, null=True)
     altitude = models.IntegerField(default=0)
+    # Keep a database default because the FSS writer uses raw SQL and older
+    # deployments omit this column while the services are upgraded in stages.
+    gps_fix_valid = models.BooleanField(default=True, db_default=True)
 
     def __str__(self):
         return f"{self.asset} @ {self.position} alt={self.altitude} ({self.timestamp})"
@@ -99,6 +104,10 @@ class AssetPosition(models.Model):
     class Meta:
         indexes = [
             models.Index(fields=['asset', '-timestamp', ]),
+            models.Index(
+                fields=['asset', 'gps_fix_valid', '-timestamp'],
+                name='asset_pos_fix_time_idx',
+            ),
         ]
 
 
