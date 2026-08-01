@@ -4,8 +4,19 @@ Tests for the assets admin.
 from django.contrib.admin.sites import AdminSite
 from django.test import TestCase
 
-from assets.admin import AssetCommandAdmin
-from assets.models import AssetCommand
+from assets.admin import AssetAdmin, AssetCommandAdmin
+from assets.models import Asset, AssetCommand
+
+
+class AssetAdminTest(TestCase):
+    """Assets leave service through retirement, not admin deletion."""
+
+    def test_delete_paths_are_disabled(self):
+        """Neither object nor bulk deletion is available for assets."""
+        asset_admin = AssetAdmin(Asset, AdminSite())
+
+        self.assertFalse(asset_admin.has_delete_permission(None))
+        self.assertIsNone(asset_admin.actions)
 
 
 class AssetCommandAdminTest(TestCase):

@@ -4,6 +4,7 @@ Tests for the Config API
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
+from django.utils import timezone
 
 from assets.models import Asset
 from config.models import AssetConfig, ServerConfig, SMMConfig
@@ -49,6 +50,17 @@ class ConfigViewTest(TestCase):
         self.assertEqual(len(data['assets']), 1)
         self.assertEqual(data['assets'][0]['name'], 'Test Drone')
         self.assertEqual(data['assets'][0]['smm_name'], 'SMM Server')
+
+    def test_config_data_json_hides_retired_assets(self):
+        """Retired identities are not offered as active configuration targets."""
+        self.asset.retired_at = timezone.now()
+        self.asset.save(update_fields=['retired_at'])
+        self.client.force_login(self.user)
+
+        response = self.client.get(reverse('config_data_json'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()['assets'], [])
 
     def test_config_data_json_asset_without_config(self):
         """An asset with no AssetConfig reports null SMM fields rather than erroring."""

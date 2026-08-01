@@ -315,7 +315,7 @@ def asset_command_confirm(request, asset_id):
     """
     Issue short-lived, single-use evidence for a destructive command.
     """
-    asset = get_object_or_404(Asset, pk=asset_id)
+    asset = get_object_or_404(Asset, pk=asset_id, retired_at__isnull=True)
     if request.method != "POST":
         return HttpResponseBadRequest("Only POST is supported")
 
@@ -374,7 +374,7 @@ def asset_command_set(request, asset_id):  # pylint: disable=too-many-return-sta
     """
     Set the command for a given asset
     """
-    asset = get_object_or_404(Asset, pk=asset_id)
+    asset = get_object_or_404(Asset, pk=asset_id, retired_at__isnull=True)
     if request.method == "POST":
         point = None
         altitude = None

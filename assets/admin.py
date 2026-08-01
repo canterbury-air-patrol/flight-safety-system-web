@@ -7,6 +7,25 @@ from django.contrib import admin
 from .models import Asset, AssetCommand
 
 
+@admin.register(Asset)
+class AssetAdmin(admin.ModelAdmin):
+    """Manage an asset's lifecycle without deleting its identity."""
+
+    list_display = ('name', 'is_active', 'retired_at')
+    list_filter = ('retired_at', )
+    fields = ('name', 'retired_at')
+    actions = None
+
+    @admin.display(boolean=True, description='Active')
+    def is_active(self, obj):
+        """Return whether the asset remains available to active APIs."""
+        return obj.retired_at is None
+
+    def has_delete_permission(self, request, obj=None):
+        """Assets are retired, never deleted through the admin."""
+        return False
+
+
 @admin.register(AssetCommand)
 class AssetCommandAdmin(admin.ModelAdmin):
     """
@@ -29,6 +48,3 @@ class AssetCommandAdmin(admin.ModelAdmin):
 
     def has_delete_permission(self, request, obj=None):
         return False
-
-
-admin.site.register(Asset)

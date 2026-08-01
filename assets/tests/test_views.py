@@ -95,6 +95,26 @@ class AssetAPITest(TestCase):
         self.assertEqual(response.status_code, 403)
         self.assertFalse(AssetCommandConfirmation.objects.exists())
 
+    def test_retired_asset_rejects_commands_and_confirmations(self):
+        """A retired identity cannot receive new commands through the web API."""
+        self.asset.retired_at = timezone.now()
+        self.asset.save(update_fields=['retired_at'])
+        self.client.force_login(self.user)
+
+        confirm_response = self.client.post(
+            reverse('asset_command_confirm', kwargs={'asset_id': self.asset.pk}),
+            {'command': 'TERM'},
+        )
+        command_response = self.client.post(
+            reverse('asset_command_set', kwargs={'asset_id': self.asset.pk}),
+            {'command': 'RTL'},
+        )
+
+        self.assertEqual(confirm_response.status_code, 404)
+        self.assertEqual(command_response.status_code, 404)
+        self.assertFalse(AssetCommandConfirmation.objects.exists())
+        self.assertFalse(AssetCommand.objects.exists())
+
     def test_asset_command_confirm_issues_bound_token(self):
         """A destructive command confirmation returns a short-lived token."""
         self.client.force_login(self.user)
