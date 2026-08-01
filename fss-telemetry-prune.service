@@ -1,5 +1,5 @@
 [Unit]
-Description=Prune Flight-Safety-System telemetry
+Description=Prune Flight-Safety-System retained data
 Requires=postgresql.service
 After=postgresql.service
 
@@ -11,6 +11,7 @@ User=cap
 WorkingDirectory=/home/cap/software/flight-safety-system-web
 Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=/usr/bin/env venv/bin/python manage.py prune_telemetry
+ExecStart=/usr/bin/env venv/bin/python manage.py prune_command_audit
 
 # This job needs database access and read access to the application settings,
 # but no elevated capabilities or writable application filesystem.

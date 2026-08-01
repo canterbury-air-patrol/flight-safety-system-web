@@ -51,6 +51,10 @@ globals().setdefault('TELEMETRY_STATUS_RETENTION_DAYS', None)
 globals().setdefault('TELEMETRY_RTT_RETENTION_DAYS', None)
 globals().setdefault('TELEMETRY_SEARCH_PROGRESS_RETENTION_DAYS', None)
 globals().setdefault('TELEMETRY_ALIGNED_WINDOW_HOURS', 24)
+# Command rows and their acknowledgement children share one audit retention
+# policy. It is separately opt-in and always preserves the newest commanded
+# state for each asset.
+globals().setdefault('COMMAND_AUDIT_RETENTION_DAYS', None)
 
 
 def merge_csrf_trusted_origins(csrf_trusted, cors_allowed):

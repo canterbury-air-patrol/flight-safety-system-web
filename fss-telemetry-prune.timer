@@ -1,5 +1,5 @@
 [Unit]
-Description=Run Flight-Safety-System telemetry pruning daily
+Description=Run Flight-Safety-System data pruning daily
 
 [Timer]
 OnCalendar=daily
