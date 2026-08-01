@@ -4,6 +4,7 @@
 
 ### Security
 
+- **Idempotent command operations** — authenticated command and destructive-confirmation POSTs now require one UUID operation ID across every redundant peer. Identical retries return the committed command without another insert or confirmation, conflicting reuse returns `409` and is logged, and the frontend retries only unresolved peers while disabling concurrent controls for that asset.
 - **Legacy API surface removed** — `/servers.json`, `/current_user/`, and `/assets/{id}/status.json` now return `404`. Their user, server, and asset status data remains available through the authenticated bulk status endpoint.
 - **Server-side destructive-command confirmation** — `DISARM` and `TERM` now require a 60-second, single-use confirmation token bound to the authenticated user, asset, and exact command. Multi-server clients prepare and consume an independent token on each peer, and direct or replayed command submissions are rejected without creating a command.
 - **Strict command payload contract** — command submissions now return `400` when they contain fields that do not apply to the selected command, instead of silently discarding them. Rejected destructive-command payloads do not consume their confirmation token.
