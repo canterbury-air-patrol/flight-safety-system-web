@@ -2,11 +2,13 @@
 
 # pylint: disable=missing-function-docstring
 
+from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
 from django.test import TestCase
 from django.utils import timezone
 
-from assets.models import Asset, AssetCommand
+from assets.models import Asset, AssetCommand, AssetCommandAck
 
 
 class AssetLifecycleTest(TestCase):
@@ -47,3 +49,57 @@ class AssetLifecycleTest(TestCase):
 
         self.assertTrue(Asset.objects.filter(pk=asset.pk).exists())
         self.assertTrue(AssetCommand.objects.filter(pk=command.pk).exists())
+
+    def test_deleting_issuer_preserves_command(self):
+        asset = Asset.objects.create(name='Issuer deletion')
+        user = get_user_model().objects.create_user(username='former-operator')
+        command = AssetCommand.objects.create(asset=asset, command='TERM', issued_by=user)
+
+        user.delete()
+
+        command.refresh_from_db()
+        self.assertIsNone(command.issued_by)
+
+
+class AssetCommandAckTest(TestCase):
+    """Every accepted acknowledgement has its own ordered history row."""
+
+    def setUp(self):
+        asset = Asset.objects.create(name='Ack asset')
+        self.command = AssetCommand.objects.create(asset=asset, command='RTL')
+
+    def create_ack(self, dispatch_id, state, timestamp, reason=0):
+        return AssetCommandAck.objects.create(
+            command=self.command,
+            dispatch_id=dispatch_id,
+            ack_state=state,
+            ack_timestamp=timestamp,
+            ack_superseded_by=reason,
+        )
+
+    def test_two_phase_and_redelivery_acks_are_retained_in_arrival_order(self):
+        received = self.create_ack(10, AssetCommand.ACK_RECEIVED, 1_700_000_000_000)
+        actioned = self.create_ack(10, AssetCommand.ACK_ACTIONED, 1_700_000_000_100)
+        redelivered = self.create_ack(11, AssetCommand.ACK_NOOP, 1_700_000_100_000)
+
+        self.assertQuerySetEqual(
+            self.command.ack_history.all(),
+            [received, actioned, redelivered],
+        )
+        self.assertTrue(all(ack.received_at is not None for ack in (received, actioned, redelivered)))
+
+    def test_concrete_supersede_reason_requires_superseded_state(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.create_ack(
+                10,
+                AssetCommand.ACK_ACTIONED,
+                1_700_000_000_000,
+                AssetCommand.SUPERSEDE_LOW_BATTERY,
+            )
+
+    def test_deleting_command_cascades_ack_history(self):
+        ack = self.create_ack(10, AssetCommand.ACK_ACTIONED, 1_700_000_000_000)
+
+        self.command.delete()
+
+        self.assertFalse(AssetCommandAck.objects.filter(pk=ack.pk).exists())

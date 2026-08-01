@@ -4,7 +4,7 @@ Make assets editable in the admin interface
 
 from django.contrib import admin
 
-from .models import Asset, AssetCommand
+from .models import Asset, AssetCommand, AssetCommandAck
 
 
 @admin.register(Asset)
@@ -38,6 +38,25 @@ class AssetCommandAdmin(admin.ModelAdmin):
     list_display = ('timestamp', 'asset', 'command', 'issued_by', 'ack_state')
     list_filter = ('command', 'ack_state', 'issued_by')
     date_hierarchy = 'timestamp'
+    actions = None
+
+    def has_add_permission(self, request):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(AssetCommandAck)
+class AssetCommandAckAdmin(admin.ModelAdmin):
+    """Read-only per-delivery acknowledgement audit history."""
+
+    list_display = ('received_at', 'command', 'dispatch_id', 'ack_state')
+    list_filter = ('ack_state', 'ack_superseded_by')
+    date_hierarchy = 'received_at'
     actions = None
 
     def has_add_permission(self, request):

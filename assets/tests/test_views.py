@@ -14,7 +14,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
-from assets.models import Asset, AssetCommand, AssetCommandConfirmation, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
+from assets.models import Asset, AssetCommand, AssetCommandAck, AssetCommandConfirmation, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
 from assets.views import ASSET_CONNECTION_TIMEOUT, COMMAND_CONFIRMATION_TTL, RTT_SAMPLE_LIMIT, RTT_SCAN_WINDOW, bulk_asset_status_data
 from fss.satisfies import satisfies
 
@@ -509,9 +509,16 @@ class AssetAPITest(TestCase):
     def test_all_status_data_ack_actioned(self):
         """An actioned ack is surfaced with its code, label and timestamp."""
         self.client.force_login(self.user)
-        AssetCommand.objects.create(
+        command = AssetCommand.objects.create(
             asset=self.asset, command='RTL',
             ack_state=AssetCommand.ACK_ACTIONED, ack_timestamp=1700000000000,
+        )
+        AssetCommandAck.objects.create(
+            command=command,
+            dispatch_id=10,
+            ack_state=AssetCommand.ACK_ACTIONED,
+            ack_timestamp=1700000000000,
+            ack_superseded_by=AssetCommand.SUPERSEDE_NONE,
         )
         data = self._get_asset_status()
         self.assertEqual(data['command']['ack_state'], 'actioned')

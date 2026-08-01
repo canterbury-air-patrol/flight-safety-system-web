@@ -7,6 +7,7 @@ import uuid
 from django.conf import settings
 from django.contrib.gis.db import models
 from django.db.models.deletion import ProtectedError
+from django.db.models.functions import Now
 from django.utils import timezone
 
 
@@ -215,6 +216,40 @@ class AssetCommand(models.Model):
             models.CheckConstraint(
                 name="ack_superseded_by_requires_superseded_state",
                 condition=models.Q(ack_superseded_by__isnull=True) | models.Q(ack_superseded_by=0) | models.Q(ack_state=2),
+            ),
+        ]
+
+
+class AssetCommandAck(models.Model):
+    """One immutable acknowledgement received for a dispatched command."""
+
+    command = models.ForeignKey(
+        AssetCommand,
+        on_delete=models.CASCADE,
+        related_name='ack_history',
+    )
+    dispatch_id = models.BigIntegerField()
+    ack_state = models.SmallIntegerField(choices=AssetCommand.ACK_STATE_CHOICES)
+    ack_timestamp = models.BigIntegerField()  # FMU wall-clock epoch-ms
+    ack_superseded_by = models.SmallIntegerField(
+        choices=AssetCommand.SUPERSEDE_REASON_CHOICES,
+    )
+    # The FSS writer inserts with raw SQL, so this must be a database default
+    # rather than only a Django-side default.
+    received_at = models.DateTimeField(db_default=Now(), editable=False)
+
+    def __str__(self):
+        return f"Ack {self.get_ack_state_display()} for {self.command}"
+
+    class Meta:
+        ordering = ('received_at', 'pk')
+        indexes = [
+            models.Index(fields=['command', 'received_at']),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                name='ack_history_supersede_reason_requires_superseded_state',
+                condition=models.Q(ack_superseded_by=0) | models.Q(ack_state=2),
             ),
         ]
 
