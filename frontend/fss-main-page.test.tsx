@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { degreesToDM } from '@canterbury-air-patrol/deg-converter'
 import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -99,6 +100,77 @@ describe('asset command rendering', () => {
     render(<FSSAsset asset={asset} knownServers={servers} setSelected={vi.fn()} />)
 
     expect(screen.getByText('Goto Position 0 0.000 N, 0 0.000 E')).toBeTruthy()
+  })
+})
+
+describe('GPS fix rendering', () => {
+  // satisfies: TC-FS-002
+  it('shows the last GPS position, dead-reckoned estimate, and their interval', () => {
+    const servers = { [SERVER_KEY]: makeServer() }
+    const lastFix = new Date(SERVER_NOW - 12_000).toISOString()
+    const estimate = new Date(SERVER_NOW).toISOString()
+    const status: AssetStatus = {
+      ...cannedAssetStatus(true),
+      gps: { timestamp: estimate, fix_valid: false },
+      position: { timestamp: lastFix, lat: -43, lng: 172, alt: 120 },
+      position_estimate: { timestamp: estimate, lat: -43.001, lng: 172.001, alt: 121 }
+    }
+    const asset = mergeServerAssets({}, SERVER_KEY, 'alpha', [status], SERVER_NOW).Drone
+
+    render(<FSSAsset asset={asset} knownServers={servers} setSelected={vi.fn()} />)
+
+    const warning = screen.getByText('No GPS Fix').closest('[role="alert"]')!
+    expect(warning.textContent).toContain('Dead-reckoned estimate is 12 s after the last GPS fix.')
+    expect(screen.getByText('Last GPS position')).toBeTruthy()
+    expect(screen.getByText('Dead-reckoned estimate')).toBeTruthy()
+    expect(screen.getByText(degreesToDM(-43, 'lat'))).toBeTruthy()
+    expect(screen.getByText(degreesToDM(-43.001, 'lat'))).toBeTruthy()
+  })
+
+  it('explains when no dead-reckoned coordinates are available', () => {
+    const servers = { [SERVER_KEY]: makeServer() }
+    const timestamp = new Date(SERVER_NOW).toISOString()
+    const status: AssetStatus = {
+      ...cannedAssetStatus(true),
+      gps: { timestamp, fix_valid: false },
+      position: { timestamp, lat: -43, lng: 172, alt: 120 }
+    }
+    const asset = mergeServerAssets({}, SERVER_KEY, 'alpha', [status], SERVER_NOW).Drone
+
+    render(<FSSAsset asset={asset} knownServers={servers} setSelected={vi.fn()} />)
+
+    expect(screen.getByRole('alert').textContent).toContain('No dead-reckoned position is available; showing the last GPS position.')
+  })
+
+  it('explains when no GPS-backed position has been recorded', () => {
+    const servers = { [SERVER_KEY]: makeServer() }
+    const timestamp = new Date(SERVER_NOW).toISOString()
+    const status: AssetStatus = {
+      ...cannedAssetStatus(true),
+      gps: { timestamp, fix_valid: false },
+      position_estimate: { timestamp, lat: -43.001, lng: 172.001, alt: 121 }
+    }
+    const asset = mergeServerAssets({}, SERVER_KEY, 'alpha', [status], SERVER_NOW).Drone
+
+    render(<FSSAsset asset={asset} knownServers={servers} setSelected={vi.fn()} />)
+
+    expect(screen.getByRole('alert').textContent).toContain('No GPS-backed position has been recorded; showing the dead-reckoned estimate.')
+  })
+
+  it('does not warn when the latest report has a valid GPS fix', () => {
+    const servers = { [SERVER_KEY]: makeServer() }
+    const timestamp = new Date(SERVER_NOW).toISOString()
+    const status: AssetStatus = {
+      ...cannedAssetStatus(true),
+      gps: { timestamp, fix_valid: true },
+      position: { timestamp, lat: -43, lng: 172, alt: 120 }
+    }
+    const asset = mergeServerAssets({}, SERVER_KEY, 'alpha', [status], SERVER_NOW).Drone
+
+    render(<FSSAsset asset={asset} knownServers={servers} setSelected={vi.fn()} />)
+
+    expect(screen.queryByText('No GPS Fix')).toBeNull()
+    expect(screen.queryByText('Dead-reckoned estimate')).toBeNull()
   })
 })
 

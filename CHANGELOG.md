@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Operator Visibility
+
+- **GPS-fix and dead-reckoning status** — asset polling distinguishes the latest GPS-backed position from a no-fix dead-reckoned estimate, reports their server-timestamp interval, and keeps the warning visible while each coordinate record ages independently. The migration must land before FSS starts writing the new validity field.
+
 ### Security
 
 - **Idempotent command operations** — authenticated command and destructive-confirmation POSTs now require one UUID operation ID across every redundant peer. Identical retries return the committed command without another insert or confirmation, conflicting reuse returns `409` and is logged, and the frontend retries only unresolved peers while disabling concurrent controls for that asset.

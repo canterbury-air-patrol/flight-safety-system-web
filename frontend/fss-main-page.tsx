@@ -22,6 +22,7 @@ import {
   rttTimeWarn,
   rttTimeOld,
   dataAgeClass,
+  positionEstimateDeltaSeconds,
   commandAckDisplay,
   assetServerMisalignment
 } from './rendering'
@@ -241,8 +242,36 @@ const FSSAssetCommandMisalignment: React.FC<{ asset: AssetState }> = ({ asset })
   )
 }
 
+const FSSPositionTable: React.FC<{
+  position: AssetPositionData
+  label?: string
+  agePrefix: string
+  serverNow?: number
+}> = ({ position, label, agePrefix, serverNow }) => (
+  <div className="asset-position-block">
+    {label && <div className="asset-position-label">{label}</div>}
+    <table className={'asset-position ' + dataAgeClass(position.timestamp, assetPositionTimeOld, assetPositionTimeWarn, agePrefix, serverNow)}>
+      <thead>
+        <tr>
+          <td>Latitude</td>
+          <td>Longitude</td>
+          <td>Altitude (ft)</td>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>{degreesToDM(position.lat, 'lat')}</td>
+          <td>{degreesToDM(position.lng, 'lon')}</td>
+          <td>{position.alt ?? 'N/A'}</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+)
+
 const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: string }> = ({ server, serverLabel }) => {
   const { data } = server
+  const noGpsFix = data?.gps?.fix_valid === false
   let rttTable
   if (data?.rtt) {
     rttTable = (
@@ -268,23 +297,29 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: st
   }
   let posTable
   if (data?.position) {
-    posTable = (
-      <table className={'asset-positon ' + dataAgeClass(data.position.timestamp, assetPositionTimeOld, assetPositionTimeWarn, 'asset-position', server.serverNow)}>
-        <thead>
-          <tr>
-            <td>Latitude</td>
-            <td>Longitude</td>
-            <td>Altitude (ft)</td>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>{degreesToDM(data.position.lat, 'lat')}</td>
-            <td>{degreesToDM(data.position.lng, 'lon')}</td>
-            <td>{data.position.alt ?? 'N/A'}</td>
-          </tr>
-        </tbody>
-      </table>
+    posTable = <FSSPositionTable position={data.position} label={noGpsFix ? 'Last GPS position' : undefined} agePrefix="asset-position" serverNow={server.serverNow} />
+  }
+  let positionEstimateTable
+  if (noGpsFix && data.position_estimate) {
+    positionEstimateTable = <FSSPositionTable position={data.position_estimate} label="Dead-reckoned estimate" agePrefix="asset-position-estimate" serverNow={server.serverNow} />
+  }
+  let gpsWarning
+  if (noGpsFix) {
+    let detail
+    if (data.position && data.position_estimate) {
+      const delta = positionEstimateDeltaSeconds(data.position.timestamp, data.position_estimate.timestamp)
+      detail = `Dead-reckoned estimate is ${delta} s after the last GPS fix.`
+    } else if (data.position) {
+      detail = 'No dead-reckoned position is available; showing the last GPS position.'
+    } else if (data.position_estimate) {
+      detail = 'No GPS-backed position has been recorded; showing the dead-reckoned estimate.'
+    } else {
+      detail = 'No GPS-backed or dead-reckoned position is available.'
+    }
+    gpsWarning = (
+      <div className="alert alert-warning asset-gps-warning" role="alert">
+        <strong>No GPS Fix</strong> — {detail}
+      </div>
     )
   }
   let batteryTable
@@ -360,8 +395,10 @@ const FSSAssetServerStatus: React.FC<{ server: AssetServerState; serverLabel: st
         {commandTxt}
         {commandAck}
       </div>
+      {gpsWarning}
       {rttTable}
       {posTable}
+      {positionEstimateTable}
       {batteryTable}
       {searchTable}
     </div>
