@@ -23,6 +23,7 @@ def verify_config(args):
     config = json.load(sys.stdin)
     db_service = config['services']['db']
     web_service = config['services']['web']
+    maintenance_service = config['services']['telemetry-maintenance']
     expected_db_environment = {
         'POSTGRES_USER': args.database_user,
         'POSTGRES_DB': args.database_name,
@@ -43,6 +44,14 @@ def verify_config(args):
         require(
             web_service['environment'].get(setting) == expected,
             f'web environment does not contain {setting}={expected}',
+        )
+    for service_name, service in (
+        ('web', web_service),
+        ('telemetry-maintenance', maintenance_service),
+    ):
+        require(
+            'COMMAND_AUDIT_RETENTION_DAYS' in service['environment'],
+            f'{service_name} environment does not expose command audit retention',
         )
 
     healthcheck = ' '.join(db_service['healthcheck']['test'])

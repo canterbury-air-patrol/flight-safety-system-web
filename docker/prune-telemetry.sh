@@ -8,6 +8,7 @@ trap 'exit 0' INT TERM
 while true
 do
     ./manage.py prune_telemetry
+    ./manage.py prune_command_audit
     sleep 86400 &
     wait "$!"
 done

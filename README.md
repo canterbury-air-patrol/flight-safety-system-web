@@ -245,7 +245,9 @@ finishes; an existing Compose project is not used.
 
 ---
 
-## Telemetry retention
+## Data retention
+
+### Telemetry retention
 
 Position, status, RTT, and search-progress retention is disabled by default.
 Configure any combination of these settings with a non-negative number of
@@ -270,8 +272,25 @@ cutoff, so rows exactly on either effective boundary survive. Set the aligned
 window to `0` to disable this safeguard and enforce only table age limits.
 
 The aligned window cannot create missing samples: if a table has no rows in
-the protected interval, it remains empty there. `AssetCommand`, destructive
-command confirmations, and other audit data are never pruned by this command.
+the protected interval, it remains empty there. Commands, acknowledgements,
+destructive-command confirmations, and other audit data are never pruned by
+this command.
+
+### Command audit retention
+
+Command audit cleanup is disabled by default. Set
+`COMMAND_AUDIT_RETENTION_DAYS` to a non-negative number of days to opt in.
+This one policy covers a command and all of its `AssetCommandAck` rows as an
+indivisible audit unit; it never deletes acknowledgement history separately
+from its command.
+
+An older command is eligible only when its issue time and its newest
+acknowledgement receipt time are both strictly older than the configured
+cutoff. Acknowledgements exactly on the cutoff remain. The newest command
+timestamp for every asset is always preserved, even when it is older than the
+limit, because FSS treats that row as the aircraft's persistent commanded
+state and redelivers it after reconnect. If several rows share that newest
+timestamp, all of them remain rather than relying on an ambiguous tie-break.
 
 ### Review and run cleanup manually
 
@@ -282,9 +301,11 @@ the counts first:
 ```bash
 # Docker (the web service must be running)
 docker compose exec web ./manage.py prune_telemetry --dry-run
+docker compose exec web ./manage.py prune_command_audit --dry-run
 
 # Direct/venv installation
 venv/bin/python manage.py prune_telemetry --dry-run
+venv/bin/python manage.py prune_command_audit --dry-run
 ```
 
 Remove `--dry-run` to delete the reported rows. The default delete batch is
@@ -292,6 +313,7 @@ Remove `--dry-run` to delete the reported rows. The default delete batch is
 
 ```bash
 venv/bin/python manage.py prune_telemetry --batch-size 500
+venv/bin/python manage.py prune_command_audit --batch-size 500
 ```
 
 The command reports a count for every enabled table and a total. Invalid,
@@ -309,8 +331,9 @@ docker compose up -d --force-recreate web
 docker compose --profile maintenance up -d telemetry-maintenance
 ```
 
-The maintenance container prunes immediately when it starts and then every 24
-hours. Inspect its reports with:
+The maintenance container runs telemetry and command-audit pruning immediately
+when it starts and then every 24 hours. Each policy remains independently
+disabled until its corresponding setting is configured. Inspect reports with:
 
 ```bash
 docker compose logs telemetry-maintenance

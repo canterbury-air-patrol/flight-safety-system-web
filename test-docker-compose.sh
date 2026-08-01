@@ -77,7 +77,7 @@ do
 done
 echo "Compose rejects missing database settings."
 
-"${smoke_compose[@]}" config --format json |
+"${smoke_compose[@]}" --profile maintenance config --format json |
     python3 "${smoke_repo_root}/docker/compose-smoke.py" \
         config \
         "${smoke_db_user}" \
