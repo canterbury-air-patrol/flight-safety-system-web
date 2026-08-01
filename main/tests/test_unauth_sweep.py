@@ -12,9 +12,11 @@ from django.urls.resolvers import URLPattern, URLResolver
 from assets.models import Asset, AssetCommand
 from fss.satisfies import satisfies
 
-# Endpoints deliberately reachable without authentication: the SPA shell (its
-# auth-gated data is fetched separately via JS) and the login flow itself.
+# Endpoints deliberately reachable without authentication: the deployment
+# health probe, the SPA shell (its auth-gated data is fetched separately via
+# JS), and the login flow itself.
 PUBLIC_URL_NAMES = {
+    'health',
     'main_view',
     'assets_main',
     'config_main',

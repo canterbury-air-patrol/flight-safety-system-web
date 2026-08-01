@@ -2,16 +2,30 @@
 Main view functions
 """
 from django.contrib.auth import authenticate, login
-from django.http import JsonResponse
+from django.db import DatabaseError, connection
+from django.http import HttpResponse, JsonResponse
 from django.middleware.csrf import get_token
 from django.shortcuts import redirect, render
 from django.views.decorators.csrf import ensure_csrf_cookie
+from django.views.decorators.http import require_GET
 
 from assets.models import Asset
 from assets.views import bulk_asset_status_data, server_now_ms
 from config.asset_configs import active_assets_with_configs
 from config.models import ServerConfig
 from fss.decorators import login_required_api
+
+
+@require_GET
+def health(_request):
+    """Report whether this process can execute an application database query."""
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+    except DatabaseError:
+        return HttpResponse('unavailable\n', status=503, content_type='text/plain')
+    return HttpResponse('ok\n', content_type='text/plain')
 
 
 @ensure_csrf_cookie

@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
+from django.db import OperationalError
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
@@ -24,6 +25,31 @@ class StatusAPITest(TestCase):
         self.user = get_user_model().objects.create_user(username='testuser', password='password')
         self.asset = Asset.objects.create(name='Test Drone')
         self.server = ServerConfig.objects.create(name='Test Server', address='1.2.3.4', client_port=8080, active=True)
+
+    def test_health_reports_database_ready_without_authentication(self):
+        """The deployment probe succeeds without creating a session."""
+        response = self.client.get(reverse('health'))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b'ok\n')
+
+    def test_health_reports_database_failure_without_details(self):
+        """Readiness fails closed without exposing database diagnostics."""
+        with patch(
+            'main.views.connection.cursor',
+            side_effect=OperationalError('secret database details'),
+        ):
+            response = self.client.get(reverse('health'))
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.content, b'unavailable\n')
+        self.assertNotContains(response, 'secret database details', status_code=503)
+
+    def test_health_rejects_post(self):
+        """The readiness endpoint remains a read-only interface."""
+        response = self.client.post(reverse('health'))
+
+        self.assertEqual(response.status_code, 405)
 
     def test_all_status_data_unauthenticated(self):
         """Test the all_status_data endpoint rejects unauthenticated requests."""
