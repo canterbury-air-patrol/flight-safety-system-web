@@ -200,6 +200,26 @@ completes migrations and serves an authenticated request. The temporary
 containers, network, and fresh database volume are removed when the test
 finishes; an existing Compose project is not used.
 
+### Audit existing asset configuration before upgrading
+
+Migration `config.0002_assetconfig_one_per_asset` deliberately stops when an
+asset has multiple SMM credential rows; it reports only the conflicting asset
+IDs and never chooses or prints a credential. Audit and resolve those rows
+before applying migrations:
+
+```bash
+# Docker, after building/pulling the new web image but before normal startup
+docker compose run --rm --no-deps --entrypoint /bin/sh web -c \
+  'cp docker/local_settings.py fss/local_settings.py && ./manage.py audit_asset_configs'
+
+# Direct/venv installation
+venv/bin/python manage.py audit_asset_configs
+```
+
+No output beyond the success message means the database is ready. If conflicts
+are listed, inspect those asset IDs and explicitly retain the intended row
+before retrying the migration; do not automate credential selection.
+
 ---
 
 ## Installing into a venv (for direct install / systemd service)

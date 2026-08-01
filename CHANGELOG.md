@@ -17,6 +17,13 @@
 - **Aligned telemetry retention** — operators can opt position, status, RTT, and search-progress tables into independent age limits while preserving a shared recent per-asset timeline (24 hours by default). The management command supports dry runs and batched deletion, with opt-in daily Compose and systemd automation; command and audit records remain untouched.
 - **Executable Docker access modes** — local HTTP evaluation now requires explicit insecure-cookie overrides and remains bound to loopback, while an optional nginx Compose proxy provides the production HTTPS path with operator-managed certificates.
 - **Fresh-database Compose startup** — PostgreSQL now provisions the configured `DB_NAME`, readiness checks that exact database, and Compose rejects missing database credentials before startup. CI verifies migrations and an authenticated request against a fresh isolated volume with deliberately different database and user names.
+- **Command audit retention** — operators can opt older command rows and their acknowledgement children into one age policy based on latest activity. Cleanup supports dry runs and batching, while every asset's newest command is always preserved for reconnect redelivery.
+
+### Data Integrity
+
+- **Retired asset identities** — assets now leave active web APIs through a reversible retirement timestamp instead of deletion. Django and admin deletion paths are blocked, and command history protects its parent asset rather than cascading away.
+- **One SMM configuration per asset** — a password-free audit and migration precheck identify legacy conflicts before the database enforces the optional one-to-one configuration contract. Unmigrated conflicting data returns an explicit `409` instead of selecting credentials by row order.
+- **Command acknowledgement history** — `AssetCommandAck` stores every acknowledgement with a database receipt time while the existing command columns remain the compatible latest-state view. The migration must land before the FSS writer begins inserting history rows.
 
 ## 1.0.0 — 2026-05-17
 
