@@ -2,6 +2,8 @@
 Views for Assets
 """
 
+import logging
+import uuid
 from datetime import timedelta
 
 from django.contrib.gis.geos import Point
@@ -20,6 +22,7 @@ from .models import Asset, AssetCommand, AssetCommandConfirmation, AssetPosition
 RTT_SAMPLE_LIMIT = 15
 COMMAND_CONFIRMATION_TTL = timedelta(seconds=60)
 ASSET_CONNECTION_TIMEOUT = timedelta(seconds=60)
+LOGGER = logging.getLogger('fss.security')
 
 # How far back the RTT window-function query below looks. Bounds the scan to
 # a fixed recent window instead of the fleet's entire history, while staying
@@ -311,7 +314,7 @@ def bulk_asset_status_data(assets):
 
 
 @login_required_api
-def asset_command_confirm(request, asset_id):
+def asset_command_confirm(request, asset_id):  # pylint: disable=too-many-return-statements
     """
     Issue short-lived, single-use evidence for a destructive command.
     """
@@ -322,15 +325,52 @@ def asset_command_confirm(request, asset_id):
     command = request.POST.get('command')
     if command not in AssetCommand.DESTRUCTIVE_COMMANDS:
         return HttpResponseBadRequest("Invalid destructive command")
+    unexpected_parameters = set(request.POST) - {'command', 'operation_id'}
+    if unexpected_parameters:
+        return HttpResponseBadRequest(
+            f"Unexpected parameter(s): {', '.join(sorted(unexpected_parameters))}"
+        )
+    operation_id = _parse_operation_id(request.POST.get('operation_id'))
+    if operation_id is None:
+        return HttpResponseBadRequest("Valid operation_id required")
+
+    # SECURITY-01 must add its destructive-command permission check here,
+    # before either revealing an existing operation or issuing evidence.
+    existing_command = AssetCommand.objects.filter(operation_id=operation_id).first()
+    if existing_command is not None:
+        requested = AssetCommand(
+            asset=asset,
+            command=command,
+            operation_id=operation_id,
+            issued_by=request.user,
+        )
+        if not _same_command_operation(existing_command, requested):
+            return _operation_conflict_response(existing_command, requested)
+        return JsonResponse({'operation_committed': True})
 
     now = timezone.now()
     AssetCommandConfirmation.objects.filter(expires_at__lte=now).delete()
+    existing_confirmation = AssetCommandConfirmation.objects.filter(
+        operation_id=operation_id,
+        user=request.user,
+        asset=asset,
+        command=command,
+        expires_at__gt=now,
+    ).first()
+    if existing_confirmation is not None:
+        return _confirmation_response(existing_confirmation)
     confirmation = AssetCommandConfirmation.objects.create(
+        operation_id=operation_id,
         user=request.user,
         asset=asset,
         command=command,
         expires_at=now + COMMAND_CONFIRMATION_TTL,
     )
+    return _confirmation_response(confirmation)
+
+
+def _confirmation_response(confirmation):
+    """Format destructive confirmation evidence consistently."""
     return JsonResponse({
         'confirmation_token': str(confirmation.token),
         'expires_at': confirmation.expires_at,
@@ -340,23 +380,104 @@ def asset_command_confirm(request, asset_id):
 def _queue_destructive_command(asset_command, user, confirmation_token):
     """
     Consume matching confirmation evidence and queue its command atomically.
+
+    Return the queued command, whether it was newly created, and whether valid
+    confirmation evidence was available. A unique-operation race resolves to
+    the winning row without consuming a second confirmation.
     """
     try:
         with transaction.atomic():
             confirmation = AssetCommandConfirmation.objects.select_for_update().filter(
                 token=confirmation_token,
+                operation_id=asset_command.operation_id,
                 user=user,
                 asset=asset_command.asset,
                 command=asset_command.command,
                 expires_at__gt=timezone.now(),
             ).first()
             if confirmation is None:
-                return False
-            asset_command.save()
+                existing = AssetCommand.objects.filter(
+                    operation_id=asset_command.operation_id,
+                ).first()
+                return existing, False, existing is not None
+            try:
+                # The savepoint keeps the outer transaction usable if another
+                # request inserts the operation after the initial lookup.
+                with transaction.atomic():
+                    asset_command.save()
+            except IntegrityError:
+                existing = AssetCommand.objects.get(
+                    operation_id=asset_command.operation_id,
+                )
+                return existing, False, True
+            AssetCommandConfirmation.objects.filter(
+                operation_id=asset_command.operation_id,
+                user=user,
+                asset=asset_command.asset,
+                command=asset_command.command,
+            ).exclude(pk=confirmation.pk).delete()
             confirmation.delete()
     except (TypeError, ValidationError, ValueError):
-        return False
-    return True
+        return None, False, False
+    return asset_command, True, True
+
+
+def _queue_routine_command(asset_command):
+    """Insert a routine command or resolve a concurrent operation insert."""
+    try:
+        with transaction.atomic():
+            asset_command.save()
+    except IntegrityError:
+        existing = AssetCommand.objects.filter(
+            operation_id=asset_command.operation_id,
+        ).first()
+        if existing is None:
+            raise
+        return existing, False
+    return asset_command, True
+
+
+def _parse_operation_id(value):
+    """Return a UUID for a valid operation identifier, otherwise None."""
+    try:
+        return uuid.UUID(value)
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def _same_position(left, right):
+    """Compare optional command points without relying on database SRIDs."""
+    if left is None or right is None:
+        return left is None and right is None
+    return left.x == right.x and left.y == right.y
+
+
+def _same_command_operation(existing, requested):
+    """Return whether two rows describe the same logical operator action."""
+    return all((
+        existing.issued_by_id == requested.issued_by_id,
+        existing.asset_id == requested.asset_id,
+        existing.command == requested.command,
+        _same_position(existing.position, requested.position),
+        existing.altitude == requested.altitude,
+    ))
+
+
+def _operation_conflict_response(existing, requested):
+    """Log and reject reuse of an operation identifier for different input."""
+    LOGGER.warning(
+        "Command operation ID conflict operation_id=%s existing_user_id=%s "
+        "requested_user_id=%s existing_asset_id=%s requested_asset_id=%s "
+        "existing_command=%s requested_command=%s",
+        requested.operation_id,
+        existing.issued_by_id,
+        requested.issued_by_id,
+        existing.asset_id,
+        requested.asset_id,
+        existing.command,
+        requested.command,
+    )
+    return HttpResponse("Operation ID conflicts with an existing command", status=409)
 
 
 def _command_parameter_error(parameters, command):
@@ -370,7 +491,7 @@ def _command_parameter_error(parameters, command):
 
 
 @login_required_api
-def asset_command_set(request, asset_id):  # pylint: disable=too-many-return-statements
+def asset_command_set(request, asset_id):  # pylint: disable=too-many-return-statements,too-many-locals,too-many-branches
     """
     Set the command for a given asset
     """
@@ -382,6 +503,9 @@ def asset_command_set(request, asset_id):  # pylint: disable=too-many-return-sta
         parameter_error = _command_parameter_error(request.POST, command)
         if parameter_error is not None:
             return HttpResponseBadRequest(parameter_error)
+        operation_id = _parse_operation_id(request.POST.get('operation_id'))
+        if operation_id is None:
+            return HttpResponseBadRequest("Valid operation_id required")
         if command in AssetCommand.REQUIRES_POSITION:
             latitude = request.POST.get('latitude')
             longitude = request.POST.get('longitude')
@@ -400,24 +524,41 @@ def asset_command_set(request, asset_id):  # pylint: disable=too-many-return-sta
                     raise ValueError
             except (ValueError, TypeError):
                 return HttpResponseBadRequest('Invalid Altitude')
-        if not asset_has_live_connection(asset):
-            return HttpResponse(
-                "Asset is disconnected: no recent RTT response",
-                status=409,
-            )
         # @login_required_api guarantees an authenticated user here; guard
         # anyway so that decorator changing can't try to assign an AnonymousUser
         # to the FK. None keeps the command row, just without an attributed user.
         issued_by = request.user if request.user.is_authenticated else None
         asset_command = AssetCommand(asset=asset, command=command,
                                      position=point, altitude=altitude,
-                                     issued_by=issued_by)
+                                     issued_by=issued_by,
+                                     operation_id=operation_id)
+        # SECURITY-01 must add its command-class permission check here, after
+        # parsing the requested command but before this operation lookup.
+        existing_command = AssetCommand.objects.filter(operation_id=operation_id).first()
+        if existing_command is not None:
+            if not _same_command_operation(existing_command, asset_command):
+                return _operation_conflict_response(existing_command, asset_command)
+            return HttpResponse("Queued")
+        if not asset_has_live_connection(asset):
+            return HttpResponse(
+                "Asset is disconnected: no recent RTT response",
+                status=409,
+            )
         if command in AssetCommand.DESTRUCTIVE_COMMANDS:
             confirmation_token = request.POST.get('confirmation_token')
-            if not _queue_destructive_command(asset_command, request.user, confirmation_token):
+            queued_command, _created, confirmed = _queue_destructive_command(
+                asset_command,
+                request.user,
+                confirmation_token,
+            )
+            if not confirmed:
                 return HttpResponseBadRequest("Valid confirmation required")
+            if not _same_command_operation(queued_command, asset_command):
+                return _operation_conflict_response(queued_command, asset_command)
         else:
-            asset_command.save()
+            queued_command, _created = _queue_routine_command(asset_command)
+            if not _same_command_operation(queued_command, asset_command):
+                return _operation_conflict_response(queued_command, asset_command)
         return HttpResponse("Queued")
     return HttpResponseBadRequest("Only POST is supported")
 
