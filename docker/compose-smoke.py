@@ -29,6 +29,7 @@ def verify_config(args):
     db_service = config['services']['db']
     web_service = config['services']['web']
     maintenance_service = config['services']['telemetry-maintenance']
+    proxy_service = config['services']['tls-proxy']
     expected_db_environment = {
         'POSTGRES_USER': args.database_user,
         'POSTGRES_DB': args.database_name,
@@ -62,6 +63,14 @@ def verify_config(args):
     healthcheck = ' '.join(db_service['healthcheck']['test'])
     require('POSTGRES_USER' in healthcheck, 'database health check does not select POSTGRES_USER')
     require('POSTGRES_DB' in healthcheck, 'database health check does not select POSTGRES_DB')
+    require(db_service.get('restart') == 'unless-stopped', 'database restart policy is not unless-stopped')
+    require(web_service.get('restart') == 'unless-stopped', 'web restart policy is not unless-stopped')
+    web_healthcheck = ' '.join(web_service['healthcheck']['test'])
+    require('/health/' in web_healthcheck, 'web health check does not use application readiness')
+    require(
+        proxy_service.get('depends_on', {}).get('web', {}).get('condition') == 'service_healthy',
+        'TLS proxy does not wait for a healthy web service during initial startup',
+    )
     database_volumes = db_service.get('volumes', [])
     expected_volume = {
         'type': 'volume',
@@ -96,7 +105,7 @@ def seed_audit_data(_args):
     username = os.environ['DJANGO_SUPERUSER_USERNAME']
     user = get_user_model().objects.get(username=username)
     asset, _created = Asset.objects.get_or_create(name=SMOKE_ASSET_NAME)
-    AssetRTT.objects.get_or_create(asset=asset, rtt=25)
+    AssetRTT.objects.create(asset=asset, rtt=25)
     AssetCommand.objects.get_or_create(
         operation_id=SMOKE_OPERATION_ID,
         defaults={
@@ -180,6 +189,32 @@ def verify_endpoint(args):
         status.get('currentUser') == username,
         'authenticated endpoint did not return the smoke-test user',
     )
+    if args.submit_command:
+        command_csrf_token = status.get('csrfToken')
+        require(command_csrf_token is not None, 'status endpoint did not return a CSRF token')
+        asset_id = next(
+            (
+                entry['asset']['pk']
+                for entry in status.get('assets', [])
+                if entry['asset']['name'] == SMOKE_ASSET_NAME
+            ),
+            None,
+        )
+        require(asset_id is not None, 'status endpoint did not return the smoke-test asset')
+        command_data = urlencode({
+            'command': 'RTL',
+            'operation_id': str(uuid.uuid4()),
+        }).encode()
+        command_request = Request(
+            f'{base_url}/assets/{asset_id}/command/set/',
+            data=command_data,
+            headers={'Referer': f'{base_url}/', 'X-CSRFToken': command_csrf_token},
+            method='POST',
+        )
+        with opener.open(command_request, timeout=5) as response:
+            command_response = response.read()
+        require(command_response == b'Queued', 'authenticated command was not queued')
+        print('Authenticated command submission recovered.')
     print(f'Authenticated endpoint returned currentUser={username}.')
 
 
@@ -202,6 +237,7 @@ def parse_args():
 
     endpoint_parser = subparsers.add_parser('endpoint')
     endpoint_parser.add_argument('--timeout', type=int, default=60)
+    endpoint_parser.add_argument('--submit-command', action='store_true')
     endpoint_parser.set_defaults(handler=verify_endpoint)
     return parser.parse_args()
 

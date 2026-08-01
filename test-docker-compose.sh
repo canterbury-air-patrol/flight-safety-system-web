@@ -3,6 +3,8 @@ set -euo pipefail
 
 smoke_repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 smoke_compose_file="${smoke_repo_root}/docker-compose.yaml"
+smoke_compose_override="${smoke_repo_root}/docker-compose.smoke.yaml"
+smoke_tls_compose_file="${smoke_repo_root}/docker-compose.tls.yaml"
 smoke_temp_dir=$(mktemp -d /tmp/fss-compose-smoke.XXXXXX)
 smoke_env_file="${smoke_temp_dir}/smoke.env"
 smoke_project="fss-bug08-smoke-$$"
@@ -29,6 +31,8 @@ CORS_ALLOWED_ORIGINS=
 SESSION_COOKIE_SECURE=false
 CSRF_COOKIE_SECURE=false
 SECURE_HSTS_SECONDS=0
+TLS_CERTIFICATE_PATH=/tmp/fss-smoke-fullchain.pem
+TLS_PRIVATE_KEY_PATH=/tmp/fss-smoke-privkey.pem
 EOF
 
 smoke_compose=(
@@ -36,6 +40,7 @@ smoke_compose=(
     --project-name "${smoke_project}"
     --env-file "${smoke_env_file}"
     --file "${smoke_compose_file}"
+    --file "${smoke_compose_override}"
 )
 
 cleanup() {
@@ -56,7 +61,8 @@ cleanup() {
 trap cleanup EXIT
 
 start_smoke_web() {
-    smoke_web_container=$("${smoke_compose[@]}" run --detach --no-deps web)
+    "${smoke_compose[@]}" up --detach --wait web
+    smoke_web_container=$("${smoke_compose[@]}" ps --quiet web)
 }
 
 run_web_check() {
@@ -65,6 +71,47 @@ run_web_check() {
         /venv/bin/python \
         /code/docker/compose-smoke.py \
         "$@"
+}
+
+wait_for_health() {
+    local container=$1
+    local expected=$2
+    local timeout=$3
+    local deadline=$((SECONDS + timeout))
+    local actual=""
+
+    while ((SECONDS < deadline))
+    do
+        actual=$(docker inspect --format '{{.State.Health.Status}}' "${container}" 2>/dev/null || true)
+        if [[ "${actual}" == "${expected}" ]]
+        then
+            return
+        fi
+        sleep 1
+    done
+    echo "Container ${container} did not become ${expected}; last health was ${actual}." >&2
+    docker inspect "${container}" || true
+    return 1
+}
+
+wait_for_restart() {
+    local container=$1
+    local previous_count=$2
+    local timeout=$3
+    local deadline=$((SECONDS + timeout))
+    local actual=""
+
+    while ((SECONDS < deadline))
+    do
+        actual=$(docker inspect --format '{{.RestartCount}}' "${container}" 2>/dev/null || true)
+        if [[ "${actual}" =~ ^[0-9]+$ ]] && ((actual > previous_count))
+        then
+            return
+        fi
+        sleep 1
+    done
+    echo "Container ${container} did not restart; restart count remained ${actual}." >&2
+    return 1
 }
 
 required_database_settings=(DB_USER DB_NAME DB_PASS)
@@ -90,7 +137,10 @@ do
 done
 echo "Compose rejects missing database settings."
 
-"${smoke_compose[@]}" --profile maintenance config --format json |
+"${smoke_compose[@]}" \
+    --file "${smoke_tls_compose_file}" \
+    --profile maintenance \
+    config --format json |
     python3 "${smoke_repo_root}/docker/compose-smoke.py" \
         config \
         "${smoke_db_user}" \
@@ -98,7 +148,6 @@ echo "Compose rejects missing database settings."
         "${smoke_db_password}"
 
 "${smoke_compose[@]}" build web
-"${smoke_compose[@]}" up --detach --wait db
 start_smoke_web
 
 run_web_check endpoint
@@ -107,7 +156,6 @@ run_web_check audit
 
 "${smoke_compose[@]}" down --remove-orphans
 smoke_web_container=""
-"${smoke_compose[@]}" up --detach --wait db
 start_smoke_web
 run_web_check audit
 
@@ -125,4 +173,30 @@ smoke_web_container=""
 start_smoke_web
 run_web_check audit
 
-echo "Docker Compose persistence and restore smoke test passed."
+# Docker only activates a restart policy after a container has remained up for
+# at least 10 seconds. Cross that guard before simulating an unexpected exit.
+sleep 10
+web_restart_count=$(docker inspect --format '{{.RestartCount}}' "${smoke_web_container}")
+docker exec "${smoke_web_container}" sh -c 'kill -TERM 1' >/dev/null 2>&1 || true
+wait_for_restart "${smoke_web_container}" "${web_restart_count}" 60
+wait_for_health "${smoke_web_container}" healthy 60
+run_web_check endpoint
+
+smoke_db_container=$("${smoke_compose[@]}" ps --quiet db)
+"${smoke_compose[@]}" stop db
+wait_for_health "${smoke_web_container}" unhealthy 45
+"${smoke_compose[@]}" start db
+wait_for_health "${smoke_db_container}" healthy 60
+wait_for_health "${smoke_web_container}" healthy 60
+run_web_check seed
+run_web_check endpoint --submit-command
+
+db_restart_count=$(docker inspect --format '{{.RestartCount}}' "${smoke_db_container}")
+docker exec "${smoke_db_container}" sh -c 'kill -TERM 1' >/dev/null 2>&1 || true
+wait_for_restart "${smoke_db_container}" "${db_restart_count}" 60
+wait_for_health "${smoke_db_container}" healthy 60
+wait_for_health "${smoke_web_container}" healthy 60
+run_web_check seed
+run_web_check endpoint --submit-command
+
+echo "Docker Compose persistence, restore, and restart recovery smoke test passed."

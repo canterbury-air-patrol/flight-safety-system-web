@@ -1,6 +1,7 @@
 services:
   web:
     build: .
+    restart: unless-stopped
     ports:
       - "127.0.0.1:8090:8080"
     depends_on:
@@ -29,6 +30,12 @@ services:
       - TELEMETRY_SEARCH_PROGRESS_RETENTION_DAYS=${TELEMETRY_SEARCH_PROGRESS_RETENTION_DAYS:-}
       - TELEMETRY_ALIGNED_WINDOW_HOURS=${TELEMETRY_ALIGNED_WINDOW_HOURS:-24}
       - COMMAND_AUDIT_RETENTION_DAYS=${COMMAND_AUDIT_RETENTION_DAYS:-}
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; urlopen('http://127.0.0.1:8080/health/', timeout=5).read()"]
+      interval: 5s
+      timeout: 6s
+      retries: 3
+      start_period: 60s
   telemetry-maintenance:
     build: .
     profiles:
@@ -53,6 +60,7 @@ services:
       - /code/docker/prune-telemetry.sh
   db:
     image: postgis/postgis:18-3.6-alpine
+    restart: unless-stopped
     volumes:
       - db-data:/var/lib/postgresql
     environment:

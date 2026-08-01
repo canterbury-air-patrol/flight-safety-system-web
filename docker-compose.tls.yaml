@@ -2,7 +2,8 @@ services:
   tls-proxy:
     image: nginx:stable-alpine
     depends_on:
-      - web
+      web:
+        condition: service_healthy
     restart: unless-stopped
     ports:
       - "80:80"
