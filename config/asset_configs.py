@@ -15,6 +15,14 @@ class DuplicateAssetConfigError(Exception):
         super().__init__(f"Duplicate AssetConfig rows for asset IDs: {self.asset_ids}")
 
 
+def duplicate_asset_config_response(asset_ids):
+    """Build the public cleanup-window response without credential data."""
+    return JsonResponse({
+        'error': 'Multiple SMM configurations exist for one or more assets.',
+        'duplicate_asset_ids': asset_ids,
+    }, status=409)
+
+
 def asset_configs_by_asset_id(assets):
     """Return one config per asset or report every conflicting asset ID."""
     configs = list(
@@ -41,7 +49,4 @@ def active_assets_with_configs():
     try:
         return (assets, asset_configs_by_asset_id(assets)), None
     except DuplicateAssetConfigError as exc:
-        return None, JsonResponse({
-            'error': 'Multiple SMM configurations exist for one or more assets.',
-            'duplicate_asset_ids': exc.asset_ids,
-        }, status=409)
+        return None, duplicate_asset_config_response(exc.asset_ids)
