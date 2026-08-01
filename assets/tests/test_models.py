@@ -2,6 +2,8 @@
 
 # pylint: disable=missing-function-docstring
 
+import uuid
+
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
 from django.db.models.deletion import ProtectedError
@@ -59,6 +61,20 @@ class AssetLifecycleTest(TestCase):
 
         command.refresh_from_db()
         self.assertIsNone(command.issued_by)
+
+    def test_operation_id_is_unique_but_legacy_nulls_are_allowed(self):
+        asset = Asset.objects.create(name='Operation identity')
+        operation_id = uuid.uuid4()
+        AssetCommand.objects.create(
+            asset=asset, command='RTL', operation_id=operation_id,
+        )
+        AssetCommand.objects.create(asset=asset, command='HOLD')
+        AssetCommand.objects.create(asset=asset, command='RON')
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            AssetCommand.objects.create(
+                asset=asset, command='MAN', operation_id=operation_id,
+            )
 
 
 class AssetCommandAckTest(TestCase):

@@ -1,6 +1,7 @@
 """
 Tests for the Asset API
 """
+import uuid
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -29,13 +30,25 @@ class AssetAPITest(TestCase):
         self.user = get_user_model().objects.create_user(username='testuser', password='testpass')
         AssetRTT.objects.create(asset=self.asset, rtt=10)
 
-    def _issue_confirmation(self, command, *, asset=None, client=None):
+    @staticmethod
+    def _command_payload(command, *, operation_id=None, **parameters):
+        return {
+            'command': command,
+            'operation_id': str(operation_id or uuid.uuid4()),
+            **parameters,
+        }
+
+    def _issue_confirmation(self, command, *, operation_id=None, asset=None, client=None):
         target_asset = asset or self.asset
         target_client = client or self.client
+        operation_id = operation_id or uuid.uuid4()
         url = reverse('asset_command_confirm', kwargs={'asset_id': target_asset.pk})
-        response = target_client.post(url, {'command': command})
+        response = target_client.post(
+            url,
+            self._command_payload(command, operation_id=operation_id),
+        )
         self.assertEqual(response.status_code, 200)
-        return response.json()['confirmation_token']
+        return response.json()['confirmation_token'], operation_id
 
     def _get_asset_status(self, asset=None):
         target_asset = asset or self.asset
@@ -84,7 +97,7 @@ class AssetAPITest(TestCase):
         self.assertLess(abs(refreshed_expiry - expected_expiry), timedelta(seconds=5))
 
         command_url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
-        response = self.client.post(command_url, {'command': 'RTL'})
+        response = self.client.post(command_url, self._command_payload('RTL'))
         self.assertEqual(response.status_code, 200)
         self.assertTrue(AssetCommand.objects.filter(asset=self.asset, command='RTL').exists())
 
@@ -103,11 +116,11 @@ class AssetAPITest(TestCase):
 
         confirm_response = self.client.post(
             reverse('asset_command_confirm', kwargs={'asset_id': self.asset.pk}),
-            {'command': 'TERM'},
+            self._command_payload('TERM'),
         )
         command_response = self.client.post(
             reverse('asset_command_set', kwargs={'asset_id': self.asset.pk}),
-            {'command': 'RTL'},
+            self._command_payload('RTL'),
         )
 
         self.assertEqual(confirm_response.status_code, 404)
@@ -119,17 +132,55 @@ class AssetAPITest(TestCase):
         """A destructive command confirmation returns a short-lived token."""
         self.client.force_login(self.user)
         before = timezone.now()
+        operation_id = uuid.uuid4()
         url = reverse('asset_command_confirm', kwargs={'asset_id': self.asset.pk})
-        response = self.client.post(url, {'command': 'DISARM'})
+        response = self.client.post(
+            url,
+            self._command_payload('DISARM', operation_id=operation_id),
+        )
 
         self.assertEqual(response.status_code, 200)
         confirmation = AssetCommandConfirmation.objects.get(token=response.json()['confirmation_token'])
         self.assertEqual(confirmation.user, self.user)
         self.assertEqual(confirmation.asset, self.asset)
         self.assertEqual(confirmation.command, 'DISARM')
+        self.assertEqual(confirmation.operation_id, operation_id)
         self.assertGreaterEqual(confirmation.expires_at, before + COMMAND_CONFIRMATION_TTL)
         response_expiry = parse_datetime(response.json()['expires_at'])
         self.assertLess(abs(response_expiry - confirmation.expires_at), timedelta(milliseconds=1))
+
+    def test_asset_command_confirm_requires_valid_operation_id(self):
+        """Destructive evidence cannot be issued without an operation UUID."""
+        self.client.force_login(self.user)
+        url = reverse('asset_command_confirm', kwargs={'asset_id': self.asset.pk})
+
+        missing = self.client.post(url, {'command': 'TERM'})
+        malformed = self.client.post(
+            url,
+            {'command': 'TERM', 'operation_id': 'not-a-uuid'},
+        )
+
+        self.assertEqual(missing.status_code, 400)
+        self.assertEqual(malformed.status_code, 400)
+        self.assertFalse(AssetCommandConfirmation.objects.exists())
+
+    def test_asset_command_confirm_reuses_live_evidence_for_operation(self):
+        """Repeated preparation returns one operation-bound token."""
+        self.client.force_login(self.user)
+        operation_id = uuid.uuid4()
+        url = reverse('asset_command_confirm', kwargs={'asset_id': self.asset.pk})
+        payload = self._command_payload('TERM', operation_id=operation_id)
+
+        first = self.client.post(url, payload)
+        second = self.client.post(url, payload)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(
+            first.json()['confirmation_token'],
+            second.json()['confirmation_token'],
+        )
+        self.assertEqual(AssetCommandConfirmation.objects.count(), 1)
 
     def test_asset_command_confirm_rejects_routine_command(self):
         """Confirmation evidence is issued only for destructive commands."""
@@ -157,13 +208,101 @@ class AssetAPITest(TestCase):
         """Test setting RTL command."""
         self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
-        response = self.client.post(url, {'command': 'RTL'})
+        response = self.client.post(url, self._command_payload('RTL'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.content.decode(), 'Queued')
 
         cmd = AssetCommand.objects.filter(asset=self.asset).latest('timestamp')
         self.assertEqual(cmd.command, 'RTL')
         self.assertEqual(cmd.issued_by, self.user)
+        self.assertIsNotNone(cmd.operation_id)
+
+    def test_asset_command_set_requires_valid_operation_id(self):
+        """Every authenticated web command must carry an operation UUID."""
+        self.client.force_login(self.user)
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+
+        missing = self.client.post(url, {'command': 'RTL'})
+        malformed = self.client.post(
+            url,
+            {'command': 'RTL', 'operation_id': 'not-a-uuid'},
+        )
+
+        self.assertEqual(missing.status_code, 400)
+        self.assertEqual(malformed.status_code, 400)
+        self.assertFalse(AssetCommand.objects.exists())
+
+    def test_asset_command_set_replays_identical_operation(self):
+        """An identical retry returns success without a second command row."""
+        self.client.force_login(self.user)
+        operation_id = uuid.uuid4()
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        payload = self._command_payload(
+            'GOTO', operation_id=operation_id,
+            latitude=-43.5, longitude=172.6,
+        )
+
+        first = self.client.post(url, payload)
+        AssetRTT.objects.filter(asset=self.asset).delete()
+        replay = self.client.post(url, payload)
+
+        self.assertEqual(first.status_code, 200)
+        self.assertEqual(replay.status_code, 200)
+        self.assertEqual(replay.content.decode(), 'Queued')
+        self.assertEqual(AssetCommand.objects.count(), 1)
+        self.assertEqual(AssetCommand.objects.get().operation_id, operation_id)
+
+    def test_asset_command_set_rejects_operation_payload_conflicts(self):
+        """A UUID cannot be reused for a changed command or command payload."""
+        self.client.force_login(self.user)
+        operation_id = uuid.uuid4()
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        first = self._command_payload(
+            'GOTO', operation_id=operation_id,
+            latitude=-43.5, longitude=172.6,
+        )
+        self.assertEqual(self.client.post(url, first).status_code, 200)
+
+        conflicts = (
+            self._command_payload('RTL', operation_id=operation_id),
+            self._command_payload(
+                'GOTO', operation_id=operation_id,
+                latitude=-43.6, longitude=172.6,
+            ),
+        )
+        with self.assertLogs('fss.security', level='WARNING') as logs:
+            responses = [self.client.post(url, payload) for payload in conflicts]
+
+        self.assertTrue(all(response.status_code == 409 for response in responses))
+        self.assertEqual(AssetCommand.objects.count(), 1)
+        self.assertEqual(len(logs.records), 2)
+
+    def test_asset_command_set_rejects_operation_identity_conflicts(self):
+        """A UUID cannot be transferred to another asset or operator."""
+        self.client.force_login(self.user)
+        operation_id = uuid.uuid4()
+        url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
+        payload = self._command_payload('RTL', operation_id=operation_id)
+        self.assertEqual(self.client.post(url, payload).status_code, 200)
+
+        other_asset = Asset.objects.create(name='Other Drone')
+        AssetRTT.objects.create(asset=other_asset, rtt=10)
+        other_asset_url = reverse(
+            'asset_command_set', kwargs={'asset_id': other_asset.pk},
+        )
+        with self.assertLogs('fss.security', level='WARNING'):
+            asset_conflict = self.client.post(other_asset_url, payload)
+
+        other_user = get_user_model().objects.create_user(
+            username='other', password='testpass',
+        )
+        self.client.force_login(other_user)
+        with self.assertLogs('fss.security', level='WARNING'):
+            user_conflict = self.client.post(url, payload)
+
+        self.assertEqual(asset_conflict.status_code, 409)
+        self.assertEqual(user_conflict.status_code, 409)
+        self.assertEqual(AssetCommand.objects.count(), 1)
 
     @satisfies('TC-WEB-013')
     def test_asset_command_set_blocks_asset_without_rtt(self):
@@ -172,7 +311,7 @@ class AssetAPITest(TestCase):
         AssetRTT.objects.filter(asset=self.asset).delete()
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
 
-        response = self.client.post(url, {'command': 'RTL'})
+        response = self.client.post(url, self._command_payload('RTL'))
 
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.content.decode(), 'Asset is disconnected: no recent RTT response')
@@ -187,7 +326,7 @@ class AssetAPITest(TestCase):
         rtt.timestamp = timezone.now() - ASSET_CONNECTION_TIMEOUT + timedelta(seconds=5)
         rtt.save(update_fields=['timestamp'])
 
-        response = self.client.post(url, {'command': 'RTL'})
+        response = self.client.post(url, self._command_payload('RTL'))
 
         self.assertEqual(response.status_code, 200)
         self.assertTrue(AssetCommand.objects.filter(asset=self.asset, command='RTL').exists())
@@ -196,7 +335,7 @@ class AssetAPITest(TestCase):
         rtt.timestamp = timezone.now() - ASSET_CONNECTION_TIMEOUT - timedelta(seconds=5)
         rtt.save(update_fields=['timestamp'])
 
-        response = self.client.post(url, {'command': 'RTL'})
+        response = self.client.post(url, self._command_payload('RTL'))
 
         self.assertEqual(response.status_code, 409)
         self.assertFalse(AssetCommand.objects.exists())
@@ -206,8 +345,14 @@ class AssetAPITest(TestCase):
         """The issuing user is recorded on the command and surfaced in the API."""
         self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
-        token = self._issue_confirmation('TERM')
-        self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
+        token, operation_id = self._issue_confirmation('TERM')
+        self.client.post(
+            url,
+            self._command_payload(
+                'TERM', operation_id=operation_id,
+                confirmation_token=token,
+            ),
+        )
 
         cmd = AssetCommand.objects.filter(asset=self.asset).latest('timestamp')
         self.assertEqual(cmd.issued_by, self.user)
@@ -221,19 +366,33 @@ class AssetAPITest(TestCase):
         self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
 
-        response = self.client.post(url, {'command': 'DISARM'})
+        response = self.client.post(url, self._command_payload('DISARM'))
         self.assertEqual(response.status_code, 400)
         self.assertFalse(AssetCommand.objects.exists())
 
-        token = self._issue_confirmation('DISARM')
-        response = self.client.post(url, {'command': 'DISARM', 'confirmation_token': token})
+        token, operation_id = self._issue_confirmation('DISARM')
+        payload = self._command_payload(
+            'DISARM', operation_id=operation_id, confirmation_token=token,
+        )
+        response = self.client.post(url, payload)
         self.assertEqual(response.status_code, 200)
         self.assertEqual(AssetCommand.objects.filter(command='DISARM').count(), 1)
         self.assertFalse(AssetCommandConfirmation.objects.filter(token=token).exists())
 
-        response = self.client.post(url, {'command': 'DISARM', 'confirmation_token': token})
-        self.assertEqual(response.status_code, 400)
+        response = self.client.post(
+            url,
+            self._command_payload('DISARM', operation_id=operation_id),
+        )
+        self.assertEqual(response.status_code, 200)
         self.assertEqual(AssetCommand.objects.filter(command='DISARM').count(), 1)
+
+        confirmation_response = self.client.post(
+            reverse('asset_command_confirm', kwargs={'asset_id': self.asset.pk}),
+            self._command_payload('DISARM', operation_id=operation_id),
+        )
+        self.assertEqual(confirmation_response.status_code, 200)
+        self.assertTrue(confirmation_response.json()['operation_committed'])
+        self.assertFalse(AssetCommandConfirmation.objects.exists())
 
     @satisfies('TC-WEB-011')
     def test_term_requires_single_use_confirmation(self):
@@ -241,12 +400,18 @@ class AssetAPITest(TestCase):
         self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
 
-        response = self.client.post(url, {'command': 'TERM'})
+        response = self.client.post(url, self._command_payload('TERM'))
         self.assertEqual(response.status_code, 400)
         self.assertFalse(AssetCommand.objects.exists())
 
-        token = self._issue_confirmation('TERM')
-        response = self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
+        token, operation_id = self._issue_confirmation('TERM')
+        response = self.client.post(
+            url,
+            self._command_payload(
+                'TERM', operation_id=operation_id,
+                confirmation_token=token,
+            ),
+        )
         self.assertEqual(response.status_code, 200)
         self.assertEqual(AssetCommand.objects.filter(command='TERM').count(), 1)
         self.assertFalse(AssetCommandConfirmation.objects.filter(token=token).exists())
@@ -254,11 +419,17 @@ class AssetAPITest(TestCase):
     def test_asset_command_set_rejects_expired_confirmation(self):
         """An expired destructive-command confirmation cannot queue a command."""
         self.client.force_login(self.user)
-        token = self._issue_confirmation('TERM')
+        token, operation_id = self._issue_confirmation('TERM')
         AssetCommandConfirmation.objects.filter(token=token).update(expires_at=timezone.now() - timedelta(seconds=1))
 
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
-        response = self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
+        response = self.client.post(
+            url,
+            self._command_payload(
+                'TERM', operation_id=operation_id,
+                confirmation_token=token,
+            ),
+        )
         self.assertEqual(response.status_code, 400)
         self.assertFalse(AssetCommand.objects.exists())
 
@@ -266,19 +437,30 @@ class AssetAPITest(TestCase):
         """A malformed token is a validation failure, not a server error."""
         self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
-        response = self.client.post(url, {'command': 'TERM', 'confirmation_token': 'not-a-uuid'})
+        response = self.client.post(
+            url,
+            self._command_payload(
+                'TERM', confirmation_token='not-a-uuid',
+            ),
+        )
         self.assertEqual(response.status_code, 400)
         self.assertFalse(AssetCommand.objects.exists())
 
     def test_asset_command_set_rejects_confirmation_for_other_user(self):
         """A token cannot be transferred to another authenticated user."""
         self.client.force_login(self.user)
-        token = self._issue_confirmation('TERM')
+        token, operation_id = self._issue_confirmation('TERM')
         other_user = get_user_model().objects.create_user(username='other', password='testpass')
         self.client.force_login(other_user)
 
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
-        response = self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
+        response = self.client.post(
+            url,
+            self._command_payload(
+                'TERM', operation_id=operation_id,
+                confirmation_token=token,
+            ),
+        )
         self.assertEqual(response.status_code, 400)
         self.assertFalse(AssetCommand.objects.exists())
         self.assertTrue(AssetCommandConfirmation.objects.filter(token=token).exists())
@@ -286,12 +468,18 @@ class AssetAPITest(TestCase):
     def test_asset_command_set_rejects_confirmation_for_other_asset(self):
         """A token cannot be used against a different asset."""
         self.client.force_login(self.user)
-        token = self._issue_confirmation('TERM')
+        token, operation_id = self._issue_confirmation('TERM')
         other_asset = Asset.objects.create(name='Other Drone')
         AssetRTT.objects.create(asset=other_asset, rtt=10)
 
         url = reverse('asset_command_set', kwargs={'asset_id': other_asset.pk})
-        response = self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
+        response = self.client.post(
+            url,
+            self._command_payload(
+                'TERM', operation_id=operation_id,
+                confirmation_token=token,
+            ),
+        )
         self.assertEqual(response.status_code, 400)
         self.assertFalse(AssetCommand.objects.exists())
         self.assertTrue(AssetCommandConfirmation.objects.filter(token=token).exists())
@@ -299,10 +487,16 @@ class AssetAPITest(TestCase):
     def test_asset_command_set_rejects_confirmation_for_other_command(self):
         """A DISARM confirmation cannot authorize TERM."""
         self.client.force_login(self.user)
-        token = self._issue_confirmation('DISARM')
+        token, operation_id = self._issue_confirmation('DISARM')
 
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
-        response = self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
+        response = self.client.post(
+            url,
+            self._command_payload(
+                'TERM', operation_id=operation_id,
+                confirmation_token=token,
+            ),
+        )
         self.assertEqual(response.status_code, 400)
         self.assertFalse(AssetCommand.objects.exists())
         self.assertTrue(AssetCommandConfirmation.objects.filter(token=token).exists())
@@ -310,12 +504,18 @@ class AssetAPITest(TestCase):
     def test_asset_command_and_confirmation_consumption_are_atomic(self):
         """A failure while consuming evidence rolls back the queued command."""
         self.client.force_login(self.user)
-        token = self._issue_confirmation('TERM')
+        token, operation_id = self._issue_confirmation('TERM')
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
 
         with patch.object(AssetCommandConfirmation, 'delete', side_effect=IntegrityError):
             with self.assertRaises(IntegrityError):
-                self.client.post(url, {'command': 'TERM', 'confirmation_token': token})
+                self.client.post(
+                    url,
+                    self._command_payload(
+                        'TERM', operation_id=operation_id,
+                        confirmation_token=token,
+                    ),
+                )
 
         self.assertFalse(AssetCommand.objects.exists())
         self.assertTrue(AssetCommandConfirmation.objects.filter(token=token).exists())
@@ -326,6 +526,7 @@ class AssetAPITest(TestCase):
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
         response = self.client.post(url, {
             'command': 'GOTO',
+            'operation_id': str(uuid.uuid4()),
             'latitude': -43.0,
             'longitude': 172.0
         })
@@ -389,9 +590,10 @@ class AssetAPITest(TestCase):
                 self.assertEqual(response.content.decode(), expected_error)
                 self.assertFalse(AssetCommand.objects.exists())
 
-        token = self._issue_confirmation('TERM')
+        token, operation_id = self._issue_confirmation('TERM')
         response = self.client.post(url, {
             'command': 'TERM',
+            'operation_id': str(operation_id),
             'confirmation_token': token,
             'altitude': 100,
         })
@@ -406,21 +608,21 @@ class AssetAPITest(TestCase):
         self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
 
-        response = self.client.post(url, {'command': 'ALT', 'altitude': 1001})
+        response = self.client.post(url, self._command_payload('ALT', altitude=1001))
         self.assertEqual(response.status_code, 400)
 
         # AssetCommand.ALTITUDE_MAX_FT is the shared ceiling with the frontend's
         # max="999" input; 1000 must be rejected so the two layers cannot drift.
-        response = self.client.post(url, {'command': 'ALT', 'altitude': 1000})
+        response = self.client.post(url, self._command_payload('ALT', altitude=1000))
         self.assertEqual(response.status_code, 400)
 
-        response = self.client.post(url, {'command': 'ALT', 'altitude': 999})
+        response = self.client.post(url, self._command_payload('ALT', altitude=999))
         self.assertEqual(response.status_code, 200)
 
-        response = self.client.post(url, {'command': 'ALT', 'altitude': -1})
+        response = self.client.post(url, self._command_payload('ALT', altitude=-1))
         self.assertEqual(response.status_code, 400)
 
-        response = self.client.post(url, {'command': 'ALT', 'altitude': 'high'})
+        response = self.client.post(url, self._command_payload('ALT', altitude='high'))
         self.assertEqual(response.status_code, 400)
 
     @satisfies('TC-WEB-012')
@@ -431,6 +633,7 @@ class AssetAPITest(TestCase):
 
         response = self.client.post(url, {
             'command': 'GOTO',
+            'operation_id': str(uuid.uuid4()),
             'latitude': 'invalid',
             'longitude': 172.0
         })
@@ -443,13 +646,13 @@ class AssetAPITest(TestCase):
         self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
 
-        response = self.client.post(url, {'command': 'GOTO', 'latitude': 91.0, 'longitude': 172.0})
+        response = self.client.post(url, self._command_payload('GOTO', latitude=91.0, longitude=172.0))
         self.assertEqual(response.status_code, 400)
 
-        response = self.client.post(url, {'command': 'GOTO', 'latitude': -43.0, 'longitude': 181.0})
+        response = self.client.post(url, self._command_payload('GOTO', latitude=-43.0, longitude=181.0))
         self.assertEqual(response.status_code, 400)
 
-        response = self.client.post(url, {'command': 'GOTO', 'latitude': -43.0, 'longitude': 172.0})
+        response = self.client.post(url, self._command_payload('GOTO', latitude=-43.0, longitude=172.0))
         self.assertEqual(response.status_code, 200)
 
     def test_asset_command_set_missing_params(self):
@@ -457,10 +660,10 @@ class AssetAPITest(TestCase):
         self.client.force_login(self.user)
         url = reverse('asset_command_set', kwargs={'asset_id': self.asset.pk})
 
-        response = self.client.post(url, {'command': 'GOTO', 'latitude': -43.0})
+        response = self.client.post(url, self._command_payload('GOTO', latitude=-43.0))
         self.assertEqual(response.status_code, 400)
 
-        response = self.client.post(url, {'command': 'ALT'})
+        response = self.client.post(url, self._command_payload('ALT'))
         self.assertEqual(response.status_code, 400)
 
     def test_all_status_data_includes_asset(self):
