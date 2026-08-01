@@ -136,6 +136,10 @@ class AssetCommand(models.Model):
         ('MAN', "Manual"),
     )
     command = models.CharField(max_length=6, choices=COMMAND_CHOICES)
+    # Stable identity for one logical operator action. Web submissions require
+    # this value, while NULL remains valid for legacy rows and commands written
+    # directly by older FSS components.
+    operation_id = models.UUIDField(null=True, blank=True, unique=True)
     DESTRUCTIVE_COMMANDS = ('DISARM', 'TERM')
     REQUIRES_POSITION = ('GOTO', )
     position = models.PointField(geography=True, null=True, blank=True)
@@ -262,6 +266,10 @@ class AssetCommandConfirmation(models.Model):
     consumes it atomically when it queues the corresponding command.
     """
     token = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    # Bind destructive confirmation evidence to the same logical operation as
+    # the command it authorizes. NULL preserves short-lived rows created before
+    # the idempotency contract was deployed.
+    operation_id = models.UUIDField(null=True, blank=True, db_index=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='+')
     asset = models.ForeignKey(Asset, on_delete=models.CASCADE)
     command = models.CharField(max_length=6, choices=AssetCommand.COMMAND_CHOICES)
