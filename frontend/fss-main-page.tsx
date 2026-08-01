@@ -1,5 +1,14 @@
 import { type Axis, degreesToDM, DMToDegrees } from '@canterbury-air-patrol/deg-converter'
-import { AssetState, AssetServerState, AssetController, assetCommandAvailability, createAssetController, mergeServerAssets } from './asset'
+import {
+  AssetState,
+  AssetServerState,
+  AssetController,
+  CommandDispatchError,
+  CommandSubmissionGuard,
+  assetCommandAvailability,
+  createAssetController,
+  mergeServerAssets
+} from './asset'
 import { ServerState, canonicalServerOrigin, createServer, getServerURL, serverConnectFailed, serverUnauthenticated, AssetPositionData, mergeServerPollResult } from './server'
 import {
   assetPositionTimeWarn,
@@ -43,7 +52,17 @@ L.Icon.Default.prototype.options.iconUrl = markerIcon
 L.Icon.Default.prototype.options.iconRetinaUrl = markerIcon2x
 L.Icon.Default.prototype.options.shadowUrl = markerIconShadow
 
-const ErrorContext = React.createContext<(msg: string | null) => void>(() => {})
+interface CommandFailure {
+  message: string
+  retry?: () => Promise<void>
+}
+
+const commandFailure = (error: unknown): CommandFailure => ({
+  message: error instanceof Error ? error.message : String(error),
+  retry: error instanceof CommandDispatchError ? error.retry : undefined
+})
+
+const ErrorContext = React.createContext<(failure: CommandFailure | null) => void>(() => {})
 
 const useCommand = () => {
   const setLastError = useContext(ErrorContext)
@@ -52,7 +71,7 @@ const useCommand = () => {
       await Promise.resolve(fn())
       onClose?.()
     } catch (e) {
-      setLastError(e instanceof Error ? e.message : String(e))
+      setLastError(commandFailure(e))
     }
   }
 }
@@ -390,8 +409,26 @@ interface FSSAssetContainerProps {
 
 export function FSSAsset(props: FSSAssetContainerProps) {
   const { asset, knownServers, setSelected } = props
-  const controller = useMemo(() => createAssetController(knownServers, asset), [knownServers, asset])
+  const [commandInFlight, setCommandInFlight] = useState(false)
+  const commandInFlightRef = useRef(false)
+  const submissionGuard = useMemo<CommandSubmissionGuard>(
+    () => ({
+      acquire: () => {
+        if (commandInFlightRef.current) return false
+        commandInFlightRef.current = true
+        setCommandInFlight(true)
+        return true
+      },
+      release: () => {
+        commandInFlightRef.current = false
+        setCommandInFlight(false)
+      }
+    }),
+    []
+  )
+  const controller = useMemo(() => createAssetController(knownServers, asset, submissionGuard), [knownServers, asset, submissionGuard])
   const commandAvailability = useMemo(() => assetCommandAvailability(knownServers, asset), [knownServers, asset])
+  const controlsDisabled = commandInFlight || !commandAvailability.commandable
   return (
     <div className="asset">
       <div className="asset-label">{asset.name}</div>
@@ -400,7 +437,7 @@ export function FSSAsset(props: FSSAssetContainerProps) {
           <strong>Commands disabled:</strong> {commandAvailability.blockedReasons.join(', ')}
         </div>
       )}
-      <FSSAssetControls controller={controller} disabled={!commandAvailability.commandable} />
+      <FSSAssetControls controller={controller} disabled={controlsDisabled} />
       <FSSAssetStatus asset={asset} setSelected={setSelected} />
     </div>
   )
@@ -472,7 +509,8 @@ export const FSSMainPage: React.FC = () => {
     [canonicalServerOrigin(window.location.origin)]: createServer('direct', '127.0.0.1', 0, window.location.origin)
   })
   const [knownAssets, setKnownAssets] = useState<Record<string, AssetState>>({})
-  const [lastError, setLastError] = useState<string | null>(null)
+  const [lastError, setLastError] = useState<CommandFailure | null>(null)
+  const [retryingCommand, setRetryingCommand] = useState(false)
 
   // Latest-value refs for polling
   const knownServersRef = useRef(knownServers)
@@ -565,12 +603,30 @@ export const FSSMainPage: React.FC = () => {
     })
   }
 
+  const retryLastCommand = async () => {
+    if (!lastError?.retry || retryingCommand) return
+    setRetryingCommand(true)
+    try {
+      await lastError.retry()
+      setLastError(null)
+    } catch (error) {
+      setLastError(commandFailure(error))
+    } finally {
+      setRetryingCommand(false)
+    }
+  }
+
   return (
     <ErrorContext.Provider value={setLastError}>
       <div>
         {lastError && (
           <div className="alert alert-danger alert-dismissible fade show m-3" role="alert">
-            <strong>Command Failure:</strong> {lastError}
+            <strong>Command Failure:</strong> {lastError.message}
+            {lastError.retry && (
+              <button type="button" className="btn btn-danger ms-2" onClick={retryLastCommand} disabled={retryingCommand}>
+                Retry failed servers
+              </button>
+            )}
             <button type="button" className="btn-close" onClick={() => setLastError(null)} aria-label="Close"></button>
           </div>
         )}

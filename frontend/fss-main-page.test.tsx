@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import React from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { mergeServerAssets } from './asset'
-import { FSSAsset, FSSServerBar } from './fss-main-page'
+import { FSSAsset, FSSMainPage, FSSServerBar } from './fss-main-page'
 import { AssetStatus, ServerState, createServer, serverConnectFailed } from './server'
 
 const SERVER_KEY = 'https://alpha.example'
@@ -23,7 +23,10 @@ const cannedAssetStatus = (connected: boolean): AssetStatus => ({
   connected
 })
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
 
 describe('disconnected asset command controls', () => {
   it('disables every command control when canned status reports no live connection', () => {
@@ -47,6 +50,34 @@ describe('disconnected asset command controls', () => {
     expect(screen.queryByRole('status')).toBeNull()
     expect((screen.getByRole('button', { name: 'RTL' }) as HTMLButtonElement).disabled).toBe(false)
   })
+
+  it('blocks rapid duplicate actions and disables every command control while submitting', async () => {
+    let resolveRequest: ((response: { ok: boolean; status: number }) => void) | undefined
+    const fetchMock = vi.fn().mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRequest = resolve
+        })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const servers = { [SERVER_KEY]: makeServer() }
+    const asset = mergeServerAssets({}, SERVER_KEY, 'alpha', [cannedAssetStatus(true)], SERVER_NOW).Drone
+
+    render(<FSSAsset asset={asset} knownServers={servers} setSelected={vi.fn()} />)
+
+    fireEvent.click(screen.getByRole('button', { name: 'RTL' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Hold' }))
+
+    await waitFor(() => {
+      for (const name of ['RTL', 'Hold', 'Altitude', 'Goto', 'Continue', 'Manual', 'DisArm', 'Terminate']) {
+        expect((screen.getByRole('button', { name }) as HTMLButtonElement).disabled).toBe(true)
+      }
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    resolveRequest!({ ok: true, status: 200 })
+    await waitFor(() => expect((screen.getByRole('button', { name: 'RTL' }) as HTMLButtonElement).disabled).toBe(false))
+  })
 })
 
 describe('asset command rendering', () => {
@@ -68,6 +99,43 @@ describe('asset command rendering', () => {
     render(<FSSAsset asset={asset} knownServers={servers} setSelected={vi.fn()} />)
 
     expect(screen.getByText('Goto Position 0 0.000 N, 0 0.000 E')).toBeTruthy()
+  })
+})
+
+describe('command retry alert', () => {
+  it('offers an explicit retry and clears the failure after that peer succeeds', async () => {
+    let commandAttempts = 0
+    const fetchMock = vi.fn().mockImplementation(async (_url: string, options?: RequestInit) => {
+      if (options?.method === 'POST') {
+        commandAttempts += 1
+        return commandAttempts === 1 ? { ok: false, status: 500, statusText: 'Server Error' } : { ok: true, status: 200 }
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          currentUser: 'pilot',
+          csrfToken: 'csrf-123',
+          server_now: SERVER_NOW,
+          servers: [],
+          assets: [cannedAssetStatus(true)]
+        })
+      }
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<FSSMainPage />)
+    fireEvent.click(await screen.findByRole('button', { name: 'RTL' }))
+
+    const retry = await screen.findByRole('button', { name: 'Retry failed servers' })
+    expect(screen.getByText('Command Failure:').closest('[role="alert"]')!.textContent).toContain('Failed on: direct: 500 Server Error')
+    fireEvent.click(retry)
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Retry failed servers' })).toBeNull())
+    expect(commandAttempts).toBe(2)
+    const commandRequests = fetchMock.mock.calls.filter((call) => call[1]?.method === 'POST')
+    const operationIds = commandRequests.map((call) => (call[1]!.body as URLSearchParams).get('operation_id'))
+    expect(new Set(operationIds).size).toBe(1)
   })
 })
 
