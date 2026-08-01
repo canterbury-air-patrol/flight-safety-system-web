@@ -14,6 +14,8 @@
 
 ### Performance / Operations
 
+- **Durable and recoverable Compose database** — PostgreSQL data now uses a project-scoped named volume at the PostGIS 18 persistent root. Operator guidance covers migration from anonymous volumes, credential-safe logical backups, isolated restore drills, destructive lifecycle commands, and separate responsibilities for external PostgreSQL servers.
+- **Automatic Compose service recovery** — core web and database containers now restart unless intentionally stopped, database-aware `/health/` readiness gates initial TLS-proxy startup, and CI proves polling and authenticated command submission recover after process and database failures.
 - **Push-ready command dispatch** — PostgreSQL now publishes committed command inserts on the `fss_command` channel with the asset ID as payload, enabling the FSS server to replace its bounded command poll with `LISTEN`/`NOTIFY` when its listener is implemented. Dispatch and acknowledgement updates do not notify.
 - **Aligned telemetry retention** — operators can opt position, status, RTT, and search-progress tables into independent age limits while preserving a shared recent per-asset timeline (24 hours by default). The management command supports dry runs and batched deletion, with opt-in daily Compose and systemd automation; command and audit records remain untouched.
 - **Executable Docker access modes** — local HTTP evaluation now requires explicit insecure-cookie overrides and remains bound to loopback, while an optional nginx Compose proxy provides the production HTTPS path with operator-managed certificates.
