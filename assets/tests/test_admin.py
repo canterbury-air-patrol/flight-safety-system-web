@@ -4,8 +4,8 @@ Tests for the assets admin.
 from django.contrib.admin.sites import AdminSite
 from django.test import TestCase
 
-from assets.admin import AssetAdmin, AssetCommandAdmin
-from assets.models import Asset, AssetCommand
+from assets.admin import AssetAdmin, AssetCommandAckAdmin, AssetCommandAdmin
+from assets.models import Asset, AssetCommand, AssetCommandAck
 
 
 class AssetAdminTest(TestCase):
@@ -33,3 +33,16 @@ class AssetCommandAdminTest(TestCase):
         self.assertFalse(self.admin.has_change_permission(None))
         self.assertFalse(self.admin.has_delete_permission(None))
         self.assertIsNone(self.admin.actions)
+
+
+class AssetCommandAckAdminTest(TestCase):
+    """Acknowledgement history is append-only outside retention cleanup."""
+
+    def test_modifications_denied(self):
+        """The admin exposes acknowledgement rows only for investigation."""
+        ack_admin = AssetCommandAckAdmin(AssetCommandAck, AdminSite())
+
+        self.assertFalse(ack_admin.has_add_permission(None))
+        self.assertFalse(ack_admin.has_change_permission(None))
+        self.assertFalse(ack_admin.has_delete_permission(None))
+        self.assertIsNone(ack_admin.actions)
