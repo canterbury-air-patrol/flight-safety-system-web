@@ -1,6 +1,8 @@
 """
 Test the main API
 """
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
 from django.test import Client, TestCase
@@ -8,6 +10,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from assets.models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetStatus
+from config.asset_configs import duplicate_asset_config_response
 from config.models import AssetConfig, ServerConfig, SMMConfig
 from fss.satisfies import satisfies
 
@@ -170,13 +173,11 @@ class StatusAPITest(TestCase):
 
     def test_asset_list_reports_duplicate_asset_configs(self):
         """Legacy conflicting rows produce an explicit configuration error."""
-        first_smm = SMMConfig.objects.create(name='First SMM', address='2.2.2.2')
-        second_smm = SMMConfig.objects.create(name='Second SMM', address='3.3.3.3')
-        AssetConfig.objects.create(asset=self.asset, smm=first_smm, smm_login='one', smm_password='first-secret')
-        AssetConfig.objects.create(asset=self.asset, smm=second_smm, smm_login='two', smm_password='second-secret')
         self.client.force_login(self.user)
 
-        response = self.client.get(reverse('asset_list'))
+        error = duplicate_asset_config_response([self.asset.pk])
+        with patch('main.views.active_assets_with_configs', return_value=(None, error)):
+            response = self.client.get(reverse('asset_list'))
 
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()['duplicate_asset_ids'], [self.asset.pk])

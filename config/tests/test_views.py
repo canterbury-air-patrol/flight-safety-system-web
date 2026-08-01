@@ -1,12 +1,15 @@
 """
 Tests for the Config API
 """
+from unittest.mock import patch
+
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
 
 from assets.models import Asset
+from config.asset_configs import duplicate_asset_config_response
 from config.models import AssetConfig, ServerConfig, SMMConfig
 
 
@@ -80,15 +83,11 @@ class ConfigViewTest(TestCase):
 
     def test_config_data_json_reports_duplicate_asset_configs(self):
         """Legacy conflicting rows are reported instead of silently collapsed."""
-        AssetConfig.objects.create(
-            asset=self.asset,
-            smm=self.smm_server,
-            smm_login='other-user',
-            smm_password='other-secret',
-        )
         self.client.force_login(self.user)
 
-        response = self.client.get(reverse('config_data_json'))
+        error = duplicate_asset_config_response([self.asset.pk])
+        with patch('config.views.active_assets_with_configs', return_value=(None, error)):
+            response = self.client.get(reverse('config_data_json'))
 
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()['duplicate_asset_ids'], [self.asset.pk])

@@ -79,7 +79,7 @@ class AssetConfig(models.Model):
     """
     Configuration for an asset
     """
-    asset = models.ForeignKey(Asset, on_delete=models.CASCADE)
+    asset = models.OneToOneField(Asset, on_delete=models.CASCADE)
     smm = models.ForeignKey(SMMConfig, on_delete=models.PROTECT)
     smm_login = models.CharField(max_length=50)
     smm_password = models.CharField(max_length=255)
@@ -89,6 +89,5 @@ class AssetConfig(models.Model):
 
     class Meta:
         indexes = [
-            models.Index(fields=['asset', ]),
             models.Index(fields=['smm', ]),
         ]
