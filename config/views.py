@@ -1,14 +1,18 @@
 """
 Views to configure servers and assets.
 """
+
+# The two asset-list endpoints intentionally share the same configuration
+# invariant while returning different response shapes.
+# pylint: disable=duplicate-code
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
 
-from assets.models import Asset
 from fss.decorators import login_required_api
 
-from .models import AssetConfig, ServerConfig, SMMConfig
+from .asset_configs import active_assets_with_configs
+from .models import ServerConfig, SMMConfig
 
 
 @ensure_csrf_cookie
@@ -24,8 +28,10 @@ def config_data_json(request):
     """
     Return all configuration data as JSON
     """
-    assets = list(Asset.objects.filter(retired_at__isnull=True))
-    configs_by_asset_id = {c.asset_id: c for c in AssetConfig.objects.filter(asset__in=assets).select_related('smm')}
+    asset_config_data, error_response = active_assets_with_configs()
+    if error_response is not None:
+        return error_response
+    assets, configs_by_asset_id = asset_config_data
 
     fss_servers = []
     for s in ServerConfig.objects.all():
