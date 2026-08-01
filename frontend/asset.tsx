@@ -78,62 +78,171 @@ export const assetCommandAvailability = (knownServers: Record<string, ServerStat
   }
 }
 
-export const sendAssetCommand = async (knownServers: Record<string, ServerState>, asset: AssetState, data: CommandPayload) => {
-  const entries: [string, string][] = Object.entries(data).map(([k, v]) => [k, String(v)])
-  const resolvedTargets = resolveAssetTargets(knownServers, asset)
-  const targets = resolvedTargets.filter((target) => !target.blockedReason)
-  const skipped = resolvedTargets.filter((target) => target.blockedReason)
-  if (targets.length === 0) {
-    const reasons = skipped.length > 0 ? skipped.map((target) => `${target.assetServer.serverName}: ${target.blockedReason}`).join(', ') : 'no known management server'
-    throw new Error(`Command not sent — ${asset.name} has no commandable server (${reasons})`)
+export interface CommandSubmissionGuard {
+  acquire(): boolean
+  release(): void
+}
+
+export class CommandDispatchError extends Error {
+  constructor(
+    message: string,
+    readonly retry: () => Promise<void>
+  ) {
+    super(message)
+    this.name = 'CommandDispatchError'
   }
-  const results = await Promise.allSettled(
-    targets.map(async ({ assetServer, server }) => {
-      const post = (path: string, bodyEntries: [string, string][]) =>
-        fetch(getAssetServerURL(server, assetServer, path), {
-          method: 'POST',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-            'X-CSRFToken': server.csrfToken ?? ''
-          },
-          body: new URLSearchParams(bodyEntries)
-        }).then((response) => {
-          if (response.status === 403) throw new Error('not authenticated — please refresh and log in')
-          if (response.status === 409) throw new Error('asset disconnected — no recent RTT response')
-          if (!response.ok) throw new Error(`${response.status} ${response.statusText}`)
-          return response
-        })
+}
 
-      let commandEntries = entries
-      if (isDestructiveCommand(data.command)) {
-        const confirmationResponse = await post('command/confirm/', [['command', data.command]])
-        const confirmation = (await confirmationResponse.json()) as { confirmation_token?: unknown }
-        if (typeof confirmation.confirmation_token !== 'string') {
-          throw new Error('server returned an invalid confirmation token')
-        }
-        commandEntries = [...entries, ['confirmation_token', confirmation.confirmation_token]]
-      }
-      await post('command/set/', commandEntries)
+class CommandRequestError extends Error {
+  constructor(
+    readonly status: number,
+    readonly responseBody: string,
+    message: string
+  ) {
+    super(message)
+    this.name = 'CommandRequestError'
+  }
+}
+
+class SkippedTargetError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SkippedTargetError'
+  }
+}
+
+interface CommandTargetState {
+  target: AssetTarget
+  confirmationToken?: string
+}
+
+const commandFailureMessage = (response: Response, responseBody: string): string => {
+  if (response.status === 403) return 'not authenticated — please refresh and log in'
+  if (response.status === 409 && responseBody.startsWith('Asset is disconnected')) return 'asset disconnected — no recent RTT response'
+  if (responseBody) return responseBody
+  return `${response.status} ${response.statusText}`.trim()
+}
+
+export const sendAssetCommand = async (knownServers: Record<string, ServerState>, asset: AssetState, data: CommandPayload, submissionGuard?: CommandSubmissionGuard) => {
+  const operationId = crypto.randomUUID()
+  const entries: [string, string][] = [...Object.entries(data).map(([k, v]) => [k, String(v)] as [string, string]), ['operation_id', operationId]]
+  const resolvedTargets = resolveAssetTargets(knownServers, asset)
+  if (resolvedTargets.length === 0) {
+    throw new Error(`Command not sent — ${asset.name} has no commandable server (no known management server)`)
+  }
+
+  let unresolvedTargets: CommandTargetState[] = resolvedTargets.map((target) => ({ target }))
+  let activeDispatch: Promise<void> | undefined
+
+  const post = async (target: AssetTarget, path: string, bodyEntries: [string, string][]) => {
+    const response = await fetch(getAssetServerURL(target.server, target.assetServer, path), {
+      method: 'POST',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+        'X-CSRFToken': target.server.csrfToken ?? ''
+      },
+      body: new URLSearchParams(bodyEntries)
     })
-  )
+    if (!response.ok) {
+      const responseBody = typeof response.text === 'function' ? await response.text() : ''
+      throw new CommandRequestError(response.status, responseBody, commandFailureMessage(response, responseBody))
+    }
+    return response
+  }
 
-  const failures = results.map((result, i) => ({ result, serverName: targets[i].assetServer.serverName })).filter(({ result }) => result.status === 'rejected')
+  const prepareDestructiveCommand = async (state: CommandTargetState): Promise<boolean> => {
+    const response = await post(state.target, 'command/confirm/', [
+      ['command', data.command],
+      ['operation_id', operationId]
+    ])
+    const confirmation = (await response.json()) as { confirmation_token?: unknown; operation_committed?: unknown }
+    if (confirmation.operation_committed === true) {
+      state.confirmationToken = undefined
+      return true
+    }
+    if (typeof confirmation.confirmation_token !== 'string') {
+      throw new Error('server returned an invalid confirmation token')
+    }
+    state.confirmationToken = confirmation.confirmation_token
+    return false
+  }
 
-  if (failures.length > 0 || skipped.length > 0) {
-    const failureMessages = failures
-      .map(({ result, serverName }) => {
+  const dispatchTarget = async (state: CommandTargetState) => {
+    if (!isDestructiveCommand(data.command)) {
+      await post(state.target, 'command/set/', entries)
+      return
+    }
+
+    if (!state.confirmationToken) {
+      const alreadyCommitted = await prepareDestructiveCommand(state)
+      if (alreadyCommitted) {
+        await post(state.target, 'command/set/', entries)
+        return
+      }
+    }
+
+    try {
+      await post(state.target, 'command/set/', [...entries, ['confirmation_token', state.confirmationToken!]])
+    } catch (error) {
+      const confirmationExpired = error instanceof CommandRequestError && error.status === 400 && error.responseBody === 'Valid confirmation required'
+      if (!confirmationExpired) throw error
+      state.confirmationToken = undefined
+      const alreadyCommitted = await prepareDestructiveCommand(state)
+      if (alreadyCommitted) {
+        await post(state.target, 'command/set/', entries)
+      } else {
+        await post(state.target, 'command/set/', [...entries, ['confirmation_token', state.confirmationToken!]])
+      }
+    }
+  }
+
+  const dispatchUnresolved = async (initial: boolean) => {
+    const attemptedTargets = unresolvedTargets
+    const results = await Promise.allSettled(
+      attemptedTargets.map(async (state) => {
+        if (initial && state.target.blockedReason) {
+          throw new SkippedTargetError(state.target.blockedReason)
+        }
+        await dispatchTarget(state)
+      })
+    )
+    const failures = results.map((result, index) => ({ result, state: attemptedTargets[index] })).filter(({ result }) => result.status === 'rejected')
+    unresolvedTargets = failures.map(({ state }) => state)
+
+    if (failures.length === 0) return
+
+    const skipped = failures.filter(({ result }) => (result as PromiseRejectedResult).reason instanceof SkippedTargetError)
+    const attemptedFailures = failures.filter(({ result }) => !((result as PromiseRejectedResult).reason instanceof SkippedTargetError))
+    const failureMessages = attemptedFailures
+      .map(({ result, state }) => {
         const reason = (result as PromiseRejectedResult).reason
         const msg = reason instanceof Error ? reason.message : String(reason)
-        return `${serverName}: ${msg}`
+        return `${state.target.assetServer.serverName}: ${msg}`
       })
       .join(', ')
-    const successCount = targets.length - failures.length
+    const successCount = resolvedTargets.length - failures.length
+    if (successCount === 0 && attemptedFailures.length === 0) {
+      const reasons = skipped.map(({ state }) => `${state.target.assetServer.serverName}: ${state.target.blockedReason}`).join(', ')
+      throw new CommandDispatchError(`Command not sent — ${asset.name} has no commandable server (${reasons})`, () => dispatch(false))
+    }
     const prefix = successCount > 0 ? `Command was queued on ${successCount} of ${resolvedTargets.length} server(s) — aircraft may already be affected. ` : ''
-    const skippedMessage = skipped.length > 0 ? `Skipped: ${skipped.map((target) => `${target.assetServer.serverName}: ${target.blockedReason}`).join(', ')}. ` : ''
-    const failedMessage = failures.length > 0 ? `Failed on: ${failureMessages}` : ''
-    throw new Error(`${prefix}${skippedMessage}${failedMessage}`.trim())
+    const skippedMessage = skipped.length > 0 ? `Skipped: ${skipped.map(({ state }) => `${state.target.assetServer.serverName}: ${state.target.blockedReason}`).join(', ')}. ` : ''
+    const failedMessage = attemptedFailures.length > 0 ? `Failed on: ${failureMessages}` : ''
+    throw new CommandDispatchError(`${prefix}${skippedMessage}${failedMessage}`.trim(), () => dispatch(false))
   }
+
+  const dispatch = (initial: boolean): Promise<void> => {
+    if (activeDispatch) return activeDispatch
+    if (submissionGuard && !submissionGuard.acquire()) return Promise.resolve()
+    activeDispatch = dispatchUnresolved(initial).finally(() => {
+      activeDispatch = undefined
+      submissionGuard?.release()
+    })
+    return activeDispatch
+  }
+
+  return dispatch(true)
 }
 
 export const assetPositionMostRecent = (asset: AssetState): AssetPositionData | undefined => {
@@ -213,8 +322,8 @@ export interface AssetController {
   positionMostRecent(): AssetPositionData | undefined
 }
 
-export const createAssetController = (knownServers: Record<string, ServerState>, asset: AssetState): AssetController => {
-  const send = (data: CommandPayload) => sendAssetCommand(knownServers, asset, data)
+export const createAssetController = (knownServers: Record<string, ServerState>, asset: AssetState, submissionGuard?: CommandSubmissionGuard): AssetController => {
+  const send = (data: CommandPayload) => sendAssetCommand(knownServers, asset, data, submissionGuard)
   return {
     name: asset.name,
     RTL: () => send({ command: 'RTL' }),
