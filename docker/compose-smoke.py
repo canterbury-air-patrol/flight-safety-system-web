@@ -6,10 +6,15 @@ import json
 import os
 import sys
 import time
+import uuid
 from http.cookiejar import CookieJar
 from urllib.error import URLError
 from urllib.parse import urlencode
 from urllib.request import HTTPCookieProcessor, Request, build_opener
+
+
+SMOKE_ASSET_NAME = 'Compose Smoke Asset'
+SMOKE_OPERATION_ID = uuid.UUID('e3759a70-f1b8-4c3b-b26c-27cdb2b59751')
 
 
 def require(condition, message):
@@ -57,7 +62,71 @@ def verify_config(args):
     healthcheck = ' '.join(db_service['healthcheck']['test'])
     require('POSTGRES_USER' in healthcheck, 'database health check does not select POSTGRES_USER')
     require('POSTGRES_DB' in healthcheck, 'database health check does not select POSTGRES_DB')
+    database_volumes = db_service.get('volumes', [])
+    expected_volume = {
+        'type': 'volume',
+        'source': 'db-data',
+        'target': '/var/lib/postgresql',
+    }
+    require(
+        any(
+            all(volume.get(key) == value for key, value in expected_volume.items())
+            for volume in database_volumes
+        ),
+        'database does not mount db-data at the PostgreSQL 18 persistent root',
+    )
     print('Rendered Compose config passes database checks.')
+
+
+def setup_django():
+    """Initialize Django only for commands that inspect application data."""
+    repository_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    sys.path.insert(0, repository_root)
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'fss.settings')
+    import django  # pylint: disable=import-outside-toplevel
+    django.setup()
+
+
+def seed_audit_data(_args):
+    """Create stable application and audit rows for persistence tests."""
+    setup_django()
+    from django.contrib.auth import get_user_model  # pylint: disable=import-outside-toplevel
+    from assets.models import Asset, AssetCommand, AssetRTT  # pylint: disable=import-outside-toplevel
+
+    username = os.environ['DJANGO_SUPERUSER_USERNAME']
+    user = get_user_model().objects.get(username=username)
+    asset, _created = Asset.objects.get_or_create(name=SMOKE_ASSET_NAME)
+    AssetRTT.objects.get_or_create(asset=asset, rtt=25)
+    AssetCommand.objects.get_or_create(
+        operation_id=SMOKE_OPERATION_ID,
+        defaults={
+            'asset': asset,
+            'command': 'RTL',
+            'issued_by': user,
+        },
+    )
+    print('Seeded asset and issued command for persistence checks.')
+
+
+def verify_audit_data(_args):
+    """Verify restored command identity and issuer relationships."""
+    setup_django()
+    from django.contrib.auth import get_user_model  # pylint: disable=import-outside-toplevel
+    from assets.models import AssetCommand  # pylint: disable=import-outside-toplevel
+
+    username = os.environ['DJANGO_SUPERUSER_USERNAME']
+    require(
+        get_user_model().objects.filter(username=username).exists(),
+        'smoke-test user did not survive database recovery',
+    )
+    command = AssetCommand.objects.select_related('asset', 'issued_by').filter(
+        operation_id=SMOKE_OPERATION_ID,
+    ).first()
+    require(command is not None, 'smoke-test command did not survive database recovery')
+    require(command.asset.name == SMOKE_ASSET_NAME, 'command lost its asset relationship')
+    require(command.issued_by is not None, 'command lost its issuing user')
+    require(command.issued_by.username == username, 'command issuer changed during recovery')
+    print('User, asset, and command audit relationships are intact.')
 
 
 def wait_for_login_page(opener, login_url, timeout_seconds):
@@ -124,6 +193,12 @@ def parse_args():
     config_parser.add_argument('database_name')
     config_parser.add_argument('database_password')
     config_parser.set_defaults(handler=verify_config)
+
+    seed_parser = subparsers.add_parser('seed')
+    seed_parser.set_defaults(handler=seed_audit_data)
+
+    audit_parser = subparsers.add_parser('audit')
+    audit_parser.set_defaults(handler=verify_audit_data)
 
     endpoint_parser = subparsers.add_parser('endpoint')
     endpoint_parser.add_argument('--timeout', type=int, default=60)

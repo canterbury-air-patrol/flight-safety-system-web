@@ -7,6 +7,7 @@ smoke_temp_dir=$(mktemp -d /tmp/fss-compose-smoke.XXXXXX)
 smoke_env_file="${smoke_temp_dir}/smoke.env"
 smoke_project="fss-bug08-smoke-$$"
 smoke_web_container=""
+smoke_backup_file="${smoke_temp_dir}/fss-smoke.dump"
 
 smoke_db_user="fss_smoke_user"
 smoke_db_name="fss_smoke_database"
@@ -54,6 +55,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
+start_smoke_web() {
+    smoke_web_container=$("${smoke_compose[@]}" run --detach --no-deps web)
+}
+
+run_web_check() {
+    docker exec \
+        "${smoke_web_container}" \
+        /venv/bin/python \
+        /code/docker/compose-smoke.py \
+        "$@"
+}
+
 required_database_settings=(DB_USER DB_NAME DB_PASS)
 for missing_setting in "${required_database_settings[@]}"
 do
@@ -86,12 +99,30 @@ echo "Compose rejects missing database settings."
 
 "${smoke_compose[@]}" build web
 "${smoke_compose[@]}" up --detach --wait db
-smoke_web_container=$("${smoke_compose[@]}" run --detach --no-deps web)
+start_smoke_web
 
-docker exec \
-    "${smoke_web_container}" \
-    /venv/bin/python \
-    /code/docker/compose-smoke.py \
-    endpoint
+run_web_check endpoint
+run_web_check seed
+run_web_check audit
 
-echo "Fresh-volume Docker Compose smoke test passed."
+"${smoke_compose[@]}" down --remove-orphans
+smoke_web_container=""
+"${smoke_compose[@]}" up --detach --wait db
+start_smoke_web
+run_web_check audit
+
+"${smoke_compose[@]}" exec --no-TTY db sh -c \
+    'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_dump --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --format=custom' \
+    > "${smoke_backup_file}"
+test -s "${smoke_backup_file}"
+
+"${smoke_compose[@]}" down --volumes --remove-orphans
+smoke_web_container=""
+"${smoke_compose[@]}" up --detach --wait db
+"${smoke_compose[@]}" exec --no-TTY db sh -c \
+    'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_restore --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --clean --if-exists --no-owner --no-privileges' \
+    < "${smoke_backup_file}"
+start_smoke_web
+run_web_check audit
+
+echo "Docker Compose persistence and restore smoke test passed."

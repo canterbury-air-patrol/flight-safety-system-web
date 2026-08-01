@@ -53,6 +53,8 @@ services:
       - /code/docker/prune-telemetry.sh
   db:
     image: postgis/postgis:18-3.6-alpine
+    volumes:
+      - db-data:/var/lib/postgresql
     environment:
       - POSTGRES_USER=${DB_USER:?Set DB_USER in .env}
       - POSTGRES_DB=${DB_NAME:?Set DB_NAME in .env}
@@ -61,3 +63,6 @@ services:
       test: ["CMD-SHELL", "pg_isready --username=\"$${POSTGRES_USER}\" --dbname=\"$${POSTGRES_DB}\""]
       timeout: 10s
       retries: 20
+
+volumes:
+  db-data:
