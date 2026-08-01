@@ -74,7 +74,7 @@ def assets_main(request):
 
 
 def _format_position(pos):
-    if not pos:
+    if not pos or pos.position is None:
         return None
     return {
         'timestamp': pos.timestamp,
@@ -186,7 +186,7 @@ def _format_command(cmd):
 
 
 # pylint: disable=too-many-arguments,too-many-positional-arguments
-def format_asset_status(asset, position=None, status=None, search=None, rtts=None, command=None, now=None):
+def format_asset_status(asset, position=None, position_report=None, status=None, search=None, rtts=None, command=None, now=None):
     """
     Centralized formatting logic for asset status data.
     """
@@ -204,6 +204,14 @@ def format_asset_status(asset, position=None, status=None, search=None, rtts=Non
     pos_data = _format_position(position)
     if pos_data:
         data['position'] = pos_data
+
+    if position_report:
+        data['gps'] = {
+            'timestamp': position_report.timestamp,
+            'fix_valid': position_report.gps_fix_valid,
+        }
+        if not position_report.gps_fix_valid and position_report.position is not None:
+            data['position_estimate'] = _format_position(position_report)
 
     stat_data = _format_status(status)
     if stat_data:
@@ -229,10 +237,10 @@ def bulk_asset_status_data(assets):
     Get current status data for a list of assets efficiently.
     """
 
-    def latest_subquery(model):
+    def latest_subquery(model, **filters):
         return (
             model.objects
-            .filter(asset=OuterRef('pk'))
+            .filter(asset=OuterRef('pk'), **filters)
             .order_by('-timestamp')
             .values('pk')[:1]
         )
@@ -241,6 +249,11 @@ def bulk_asset_status_data(assets):
     annotated_assets = list(
         assets.annotate(
             pos_id=Subquery(latest_subquery(AssetPosition)),
+            valid_pos_id=Subquery(latest_subquery(
+                AssetPosition,
+                gps_fix_valid=True,
+                position__isnull=False,
+            )),
             stat_id=Subquery(latest_subquery(AssetStatus)),
             srch_id=Subquery(latest_subquery(AssetSearchProgress)),
             cmd_id=Subquery(latest_subquery(AssetCommand)),
@@ -250,9 +263,14 @@ def bulk_asset_status_data(assets):
     # Fetch latest objects for all assets in 4 bulk queries
     latest = {
         'positions': {
-            p.asset_id: p
+            p.pk: p
             for p in AssetPosition.objects.filter(
-                pk__in=[a.pos_id for a in annotated_assets if a.pos_id]
+                pk__in={
+                    position_id
+                    for a in annotated_assets
+                    for position_id in (a.pos_id, a.valid_pos_id)
+                    if position_id
+                }
             )
         },
         'statuses': {
@@ -302,7 +320,8 @@ def bulk_asset_status_data(assets):
         results.append(
             format_asset_status(
                 asset,
-                position=latest['positions'].get(asset.pk),
+                position=latest['positions'].get(asset.valid_pos_id),
+                position_report=latest['positions'].get(asset.pos_id),
                 status=latest['statuses'].get(asset.pk),
                 search=latest['searches'].get(asset.pk),
                 rtts=rtts_by_asset.get(asset.pk, []),

@@ -9,8 +9,9 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.contrib.gis.geos import Point
 from django.contrib.sessions.models import Session
-from django.db import IntegrityError
+from django.db import IntegrityError, connection
 from django.test import Client, TestCase
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
@@ -692,6 +693,8 @@ class AssetAPITest(TestCase):
         self.assertEqual(data['position']['lat'], -43.0)
         self.assertEqual(data['position']['lng'], 172.0)
         self.assertEqual(data['position']['alt'], 120)
+        self.assertTrue(data['gps']['fix_valid'])
+        self.assertNotIn('position_estimate', data)
 
         self.assertEqual(data['status']['battery_percent'], 85)
         self.assertEqual(data['status']['battery_used'], 500)
@@ -700,6 +703,85 @@ class AssetAPITest(TestCase):
         self.assertEqual(data['search']['id'], 7)
         self.assertEqual(data['search']['progress'], 3)
         self.assertEqual(data['search']['total'], 10)
+
+    def test_all_status_data_no_fix_includes_last_fix_and_estimate(self):
+        """A no-fix report keeps trusted and dead-reckoned positions separate."""
+        self.client.force_login(self.user)
+        now = timezone.now()
+        last_fix = now - timedelta(seconds=12)
+        AssetPosition.objects.create(
+            asset=self.asset,
+            timestamp=last_fix,
+            position=Point(172.0, -43.0),
+            altitude=120,
+        )
+        AssetPosition.objects.create(
+            asset=self.asset,
+            timestamp=now,
+            position=Point(172.001, -43.001),
+            altitude=121,
+            gps_fix_valid=False,
+        )
+
+        data = self._get_asset_status()
+
+        self.assertFalse(data['gps']['fix_valid'])
+        self.assertLess(
+            abs(parse_datetime(data['gps']['timestamp']) - now),
+            timedelta(milliseconds=1),
+        )
+        self.assertLess(
+            abs(parse_datetime(data['position']['timestamp']) - last_fix),
+            timedelta(milliseconds=1),
+        )
+        self.assertEqual(data['position']['lat'], -43.0)
+        self.assertEqual(data['position_estimate']['lat'], -43.001)
+        self.assertEqual(data['position_estimate']['lng'], 172.001)
+
+    def test_all_status_data_no_fix_without_estimate_keeps_last_fix(self):
+        """No-fix state remains visible when the aircraft has no estimate."""
+        self.client.force_login(self.user)
+        AssetPosition.objects.create(
+            asset=self.asset,
+            position=Point(172.0, -43.0),
+            altitude=120,
+        )
+        AssetPosition.objects.create(
+            asset=self.asset,
+            position=None,
+            altitude=0,
+            gps_fix_valid=False,
+        )
+
+        data = self._get_asset_status()
+
+        self.assertFalse(data['gps']['fix_valid'])
+        self.assertIn('position', data)
+        self.assertNotIn('position_estimate', data)
+
+    def test_all_status_data_restored_fix_hides_old_estimate(self):
+        """A newer valid fix becomes current and retires the warning estimate."""
+        self.client.force_login(self.user)
+        now = timezone.now()
+        AssetPosition.objects.create(
+            asset=self.asset,
+            timestamp=now - timedelta(seconds=2),
+            position=Point(172.001, -43.001),
+            altitude=121,
+            gps_fix_valid=False,
+        )
+        AssetPosition.objects.create(
+            asset=self.asset,
+            timestamp=now,
+            position=Point(172.002, -43.002),
+            altitude=122,
+        )
+
+        data = self._get_asset_status()
+
+        self.assertTrue(data['gps']['fix_valid'])
+        self.assertEqual(data['position']['lat'], -43.002)
+        self.assertNotIn('position_estimate', data)
 
     def test_all_status_data_ack_pending(self):
         """A dispatched-but-unacked command reports ack_state 'pending'."""
@@ -770,8 +852,32 @@ class AssetAPITest(TestCase):
         self.assertEqual(data['asset']['name'], 'Empty Drone')
         self.assertFalse(data['connected'])
         self.assertNotIn('position', data)
+        self.assertNotIn('position_estimate', data)
+        self.assertNotIn('gps', data)
         self.assertNotIn('status', data)
         self.assertNotIn('rtt', data)
+
+    def test_bulk_asset_status_gps_queries_do_not_scale_with_assets(self):
+        """Paired position lookup remains bulk rather than one query per asset."""
+        AssetPosition.objects.create(
+            asset=self.asset,
+            position=Point(172.0, -43.0),
+            altitude=120,
+        )
+        other = Asset.objects.create(name='Query Count Drone')
+        AssetPosition.objects.create(
+            asset=other,
+            position=Point(173.0, -44.0),
+            altitude=130,
+            gps_fix_valid=False,
+        )
+
+        with CaptureQueriesContext(connection) as single_queries:
+            bulk_asset_status_data(Asset.objects.filter(pk=self.asset.pk))
+        with CaptureQueriesContext(connection) as fleet_queries:
+            bulk_asset_status_data(Asset.objects.all())
+
+        self.assertEqual(len(fleet_queries), len(single_queries))
 
     def test_rtt_sample_limit(self):
         """Test that RTT calculation only uses the latest RTT_SAMPLE_LIMIT samples."""
