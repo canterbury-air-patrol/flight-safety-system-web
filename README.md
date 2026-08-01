@@ -195,10 +195,118 @@ settings, or migrations:
 
 The test renders the documented environment shape, checks that missing
 database settings fail interpolation, and starts an isolated Compose project
-with different database and user names. It then proves the web container
-completes migrations and serves an authenticated request. The temporary
-containers, network, and fresh database volume are removed when the test
-finishes; an existing Compose project is not used.
+with different database and user names. It proves migrations, authenticated
+polling and command submission, named-volume persistence, logical backup and
+restore, application readiness, and automatic recovery from web and database
+process exits. The temporary containers, network, and database volumes are
+removed when the test finishes; an existing Compose project is not used.
+
+### Protect and recover the Compose database
+
+Compose stores PostgreSQL 18 data in the project-scoped `db-data` named volume,
+mounted at the image's persistent root, `/var/lib/postgresql`. `docker compose
+stop`, `restart`, and `down` preserve this volume. **`docker compose down
+--volumes` deletes it and all database data; never use that option against an
+operational project unless a verified backup is available and deletion is
+intentional.**
+
+A named volume provides stable persistence, not a backup. Set an
+installation-specific backup schedule and retention period, regularly copy
+backups to encrypted off-host storage, and test restoration. Database dumps
+are sensitive: in addition to users and command history they currently contain
+plaintext SMM credentials.
+
+Create a timestamped custom-format backup without putting the database password
+in the host command line or dump artifact metadata:
+
+```bash
+install -d -m 700 backups
+umask 077
+backup_file="backups/fss-$(date -u +%Y%m%dT%H%M%SZ).dump"
+docker compose exec -T db sh -c \
+  'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_dump --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --format=custom' \
+  > "${backup_file}"
+test -s "${backup_file}"
+```
+
+Deployments created before `db-data` was added use an anonymous database
+volume. Before updating their Compose configuration, run the backup command
+above against the still-running old stack. After updating the checkout:
+
+```bash
+docker compose down
+docker compose up -d --wait db
+docker compose exec -T db sh -c \
+  'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_restore --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --clean --if-exists --no-owner --no-privileges' \
+  < "${backup_file}"
+docker compose up -d --wait
+```
+
+Do not start `web` before restoring: its normal entrypoint migrates whichever
+database is attached, which could make a newly created empty database look like
+a valid but data-free installation. Keep the old anonymous volume until the
+restored application has been verified.
+
+Test every backup in an isolated Compose project. The project name below gives
+the drill its own network and `db-data` volume; only that drill volume is
+removed at the end:
+
+```bash
+restore_compose=(
+  docker compose
+  --project-name fss-restore-drill
+  --env-file .env
+  --file docker-compose.yaml
+)
+"${restore_compose[@]}" up -d --wait db
+"${restore_compose[@]}" exec --no-TTY db sh -c \
+  'PGPASSWORD="$POSTGRES_PASSWORD" exec pg_restore --username="$POSTGRES_USER" --dbname="$POSTGRES_DB" --clean --if-exists --no-owner --no-privileges' \
+  < "${backup_file}"
+"${restore_compose[@]}" run --rm --no-deps --entrypoint /bin/sh web -c \
+  'cp docker/local_settings.py fss/local_settings.py &&
+   ./manage.py migrate &&
+   ./manage.py check --deploy --fail-level WARNING &&
+   ./manage.py shell -c "from django.contrib.auth import get_user_model; from assets.models import Asset, AssetCommand; print({\"users\": get_user_model().objects.count(), \"assets\": Asset.objects.count(), \"commands\": AssetCommand.objects.count(), \"commands_with_issuer\": AssetCommand.objects.exclude(issued_by=None).count()})"'
+"${restore_compose[@]}" down --volumes
+```
+
+Compare the counts with the source installation and inspect representative
+users, assets, command history, and command issuers before declaring the backup
+usable. Run the drill with the same application version that created the dump,
+then test the intended upgrade and migrations separately.
+
+### Compose recovery and readiness
+
+The `db`, `web`, TLS proxy, and optional maintenance service use
+`restart: unless-stopped`. They return after a host or Docker daemon restart
+and after an unexpected process exit, but an intentionally stopped service
+stays stopped. `depends_on` and its health conditions order initial startup;
+they are not ongoing supervision after a dependency restarts.
+
+`GET /health/` is an unauthenticated, database-aware readiness probe. It
+returns `200` only when Django can execute a query and otherwise returns `503`
+without database details. The web container uses it for its Compose health
+state, and the TLS proxy waits for that state during initial startup. Check an
+installation with:
+
+```bash
+docker compose ps
+curl --fail --silent --show-error http://127.0.0.1:8090/health/
+docker compose logs --tail=200 db web tls-proxy
+```
+
+Use the HTTPS deployment hostname instead of the loopback URL when checking
+through the TLS proxy. A migration or startup failure leaves `web` restarting
+and never healthy; inspect its logs rather than treating a running or listening
+container as usable. `docker compose up -d --wait` returns only after enabled
+health-checked services are healthy and other enabled services are running.
+
+As a deployment recovery drill, restart the Docker daemon, wait for `db` and
+`web` to become healthy, verify the HTTPS `/health/` response, log in, confirm
+status polling resumes, and submit a non-destructive command to a connected
+test asset. This full-stack drill is deliberately operator-run because it
+interrupts every Docker workload on the host and requires the deployment's
+real certificate and proxy configuration.
 
 ### Audit existing asset configuration before upgrading
 
@@ -262,6 +370,58 @@ before retrying the migration; do not automate credential selection.
    - Production: `./start-wsgi.sh` (uWSGI on `localhost:8090`; put behind nginx or Apache)
 
    A systemd unit file is provided in `fss-web.service` for running as a service.
+
+### External PostgreSQL operations and recovery
+
+The Compose volume, database restart policy, and container backup commands do
+not apply when `fss/local_settings.py` points at a separately installed or
+managed PostgreSQL server. That server's storage, replication, availability,
+backup schedule, retention, encryption, and off-host copies remain the
+database operator or provider's responsibility.
+
+For a self-managed external server, use the matching PostgreSQL client tools
+and a mode-0600 password file rather than putting a password in shell history:
+
+```bash
+install -d -m 700 backups
+umask 077
+export PGPASSFILE=/secure/path/to/fss.pgpass
+pg_dump --host=POSTGRES_SERVER --username=POSTGRES_USER \
+  --dbname=POSTGRES_DBNAME --format=custom \
+  --file="backups/fss-$(date -u +%Y%m%dT%H%M%SZ).dump"
+unset PGPASSFILE
+```
+
+Managed services may require their own snapshot or point-in-time recovery
+workflow in addition to logical dumps. Restore into a separate database, make
+the PostGIS extension available, and run a separate checkout against that
+database. Run `./manage.py migrate`, `./manage.py check --deploy --fail-level
+WARNING`, and the same user/asset/command/issuer verification described in the
+Compose drill before accepting the backup.
+
+The supplied `fss-web.service` assumes PostgreSQL is a local systemd service:
+it contains `Requires=postgresql.service` and `After=postgresql.service`. For a
+remote or managed database, remove those two directives from the installed
+unit and use network readiness instead:
+
+```ini
+[Unit]
+Wants=network-online.target
+After=network-online.target
+```
+
+Then run `sudo systemctl daemon-reload` before enabling or restarting the web
+service. `start-wsgi.sh` runs migrations before opening uWSGI, so an unavailable
+database makes startup fail and the unit's existing `Restart=on-failure` policy
+retries it. Inspect `systemctl status fss-web` and `journalctl -u fss-web` if it
+does not recover.
+
+Direct installations use the Psycopg pool configured in the local-settings
+template. After an external database restart, requests using stale pooled
+connections may fail while those connections are discarded. Retry `/health/`
+until it returns `200`, then verify authenticated polling and command
+submission. Per-checkout health queries are intentionally not enabled, avoiding
+an extra database round trip on every request.
 
 ---
 
