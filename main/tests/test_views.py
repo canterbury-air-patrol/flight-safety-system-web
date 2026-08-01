@@ -9,6 +9,7 @@ from django.db import OperationalError
 from django.test import Client, TestCase
 from django.urls import reverse
 from django.utils import timezone
+from psycopg_pool import PoolTimeout
 
 from assets.models import Asset, AssetCommand, AssetPosition, AssetRTT, AssetStatus
 from config.asset_configs import duplicate_asset_config_response
@@ -44,6 +45,14 @@ class StatusAPITest(TestCase):
         self.assertEqual(response.status_code, 503)
         self.assertEqual(response.content, b'unavailable\n')
         self.assertNotContains(response, 'secret database details', status_code=503)
+
+    def test_health_reports_connection_pool_timeout(self):
+        """An exhausted external-database pool is an unavailable service."""
+        with patch('main.views.connection.cursor', side_effect=PoolTimeout()):
+            response = self.client.get(reverse('health'))
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.content, b'unavailable\n')
 
     def test_health_rejects_post(self):
         """The readiness endpoint remains a read-only interface."""
