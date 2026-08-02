@@ -7,9 +7,21 @@ import {
   CommandSubmissionGuard,
   assetCommandAvailability,
   createAssetController,
-  mergeServerAssets
+  mergeServerAssets,
+  pruneAssetServers
 } from './asset'
-import { ServerState, canonicalServerOrigin, createServer, getServerURL, serverConnectFailed, serverUnauthenticated, AssetPositionData, mergeServerPollResult } from './server'
+import {
+  ServerState,
+  canonicalServerOrigin,
+  createServer,
+  getServerURL,
+  serverConnectFailed,
+  serverUnauthenticated,
+  AssetPositionData,
+  mergeServerPollResult,
+  reconcileServerTopology,
+  serverTopologyMismatch
+} from './server'
 import {
   assetPositionTimeWarn,
   assetPositionTimeOld,
@@ -527,6 +539,7 @@ export function FSSServerBar(props: FSSServerBarProps) {
   const reachableServers = knownServers.filter((server) => server.connected).length
   const redundancyLost = reachableServers < 2
   const serverNoun = reachableServers === 1 ? 'server' : 'servers'
+  const topologyMismatch = serverTopologyMismatch(knownServers)
   return (
     <div className="bar-server">
       <div className={`alert ${redundancyLost ? 'alert-danger' : 'alert-success'} system-status`} role="status">
@@ -534,6 +547,18 @@ export function FSSServerBar(props: FSSServerBarProps) {
         {' — '}
         {redundancyLost ? `Redundancy lost: ${reachableServers} FSS ${serverNoun} reachable; 2 required` : `${reachableServers} FSS ${serverNoun} reachable`}
       </div>
+      {topologyMismatch.length > 0 && (
+        <div className="alert alert-warning topology-mismatch" role="alert">
+          <strong>Server topology mismatch</strong> — peers advertise different FSS server sets.
+          <ul>
+            {topologyMismatch.map((snapshot) => (
+              <li key={snapshot.serverOrigin}>
+                {snapshot.serverName}: {snapshot.origins.join(', ')}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
       {knownServers.map((server) => (
         <FSSServer key={server.url} server={server} />
       ))}
@@ -542,8 +567,9 @@ export function FSSServerBar(props: FSSServerBarProps) {
 }
 
 export const FSSMainPage: React.FC = () => {
+  const directServerKey = canonicalServerOrigin(window.location.origin)
   const [knownServers, setKnownServers] = useState<Record<string, ServerState>>({
-    [canonicalServerOrigin(window.location.origin)]: createServer('direct', '127.0.0.1', 0, window.location.origin)
+    [directServerKey]: createServer('direct', '127.0.0.1', 0, window.location.origin)
   })
   const [knownAssets, setKnownAssets] = useState<Record<string, AssetState>>({})
   const [lastError, setLastError] = useState<CommandFailure | null>(null)
@@ -594,6 +620,9 @@ export const FSSMainPage: React.FC = () => {
     let currentAssets = { ...knownAssetsRef.current }
 
     for (const { serverKey, data, unauthenticated } of results) {
+      // A newer cycle may already have pruned a server while this superseded
+      // request was resolving. Its stale result must not resurrect the origin.
+      if (!currentServers[serverKey]) continue
       if (data === null) {
         if (unauthenticated) {
           currentServers = { ...currentServers, [serverKey]: serverUnauthenticated(currentServers[serverKey]) }
@@ -605,11 +634,14 @@ export const FSSMainPage: React.FC = () => {
       }
     }
 
+    currentServers = reconcileServerTopology(currentServers, directServerKey)
+
     for (const { serverKey, data } of results) {
-      if (data !== null) {
+      if (data !== null && currentServers[serverKey]) {
         currentAssets = mergeServerAssets(currentAssets, serverKey, currentServers[serverKey].name, data.assets, data.server_now)
       }
     }
+    currentAssets = pruneAssetServers(currentAssets, new Set(Object.keys(currentServers)))
 
     setKnownServers(currentServers)
     setKnownAssets(currentAssets)

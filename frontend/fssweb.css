@@ -12,6 +12,15 @@ div.bar-server {
   margin: 0 10px 10px;
 }
 
+.topology-mismatch {
+  margin: 0 10px 10px;
+  text-align: left;
+}
+
+.topology-mismatch ul {
+  margin-bottom: 0;
+}
+
 div.bar-assets {
   width: 100%;
   margin: 0 auto;

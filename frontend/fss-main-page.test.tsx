@@ -240,4 +240,25 @@ describe('FSS server redundancy status', () => {
 
     expect(screen.getByRole('status').textContent).toBe('Systems: Critical — Redundancy lost: 0 FSS servers reachable; 2 required')
   })
+
+  it('surfaces topology disagreement with each retained server snapshot', () => {
+    const alpha = { ...makeServer('alpha'), advertisedOrigins: ['https://gamma.example'] }
+    const gamma = { ...makeServer('gamma'), advertisedOrigins: ['https://alpha.example', 'https://beta.example'] }
+
+    render(<FSSServerBar knownServers={[alpha, gamma]} />)
+
+    const warning = screen.getByRole('alert')
+    expect(warning.textContent).toContain('Server topology mismatch')
+    expect(warning.textContent).toContain('alpha: https://alpha.example, https://gamma.example')
+    expect(warning.textContent).toContain('gamma: https://alpha.example, https://beta.example, https://gamma.example')
+  })
+
+  it('does not warn for symmetric peer snapshots', () => {
+    const alpha = { ...makeServer('alpha'), advertisedOrigins: ['https://beta.example'] }
+    const beta = { ...makeServer('beta'), advertisedOrigins: ['https://alpha.example'] }
+
+    render(<FSSServerBar knownServers={[alpha, beta]} />)
+
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
 })
