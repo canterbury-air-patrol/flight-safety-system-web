@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { AssetState, CommandDispatchError, createAsset, mergeServerAssets, sendAssetCommand } from './asset'
+import { AssetState, CommandDispatchError, createAsset, mergeServerAssets, pruneAssetServers, sendAssetCommand } from './asset'
 import { ServerState, createServer } from './server'
 import { AssetStatus } from './server'
 
@@ -460,5 +460,27 @@ describe('mergeServerAssets', () => {
 
     expect(Object.keys(result)).toEqual(['Drone'])
     expect(result.Drone.servers['alpha-origin'].assetPk).toBe(5)
+  })
+})
+
+describe('pruneAssetServers', () => {
+  it('removes obsolete origin entries and falls back to a retained selection', () => {
+    const first = mergeServerAssets({}, 'alpha-origin', 'alpha', [statusFor('Drone', 5)])
+    const both = mergeServerAssets(first, 'beta-origin', 'beta', [statusFor('Drone', 9)])
+
+    const result = pruneAssetServers(both, new Set(['beta-origin']))
+
+    expect(Object.keys(result.Drone.servers)).toEqual(['beta-origin'])
+    expect(result.Drone.selectedServerKey).toBe('beta-origin')
+  })
+
+  it('drops orphaned assets without disturbing assets on retained origins', () => {
+    const obsolete = mergeServerAssets({}, 'alpha-origin', 'alpha', [statusFor('Old Drone', 5)])
+    const assets = mergeServerAssets(obsolete, 'beta-origin', 'beta', [statusFor('Current Drone', 9)])
+
+    const result = pruneAssetServers(assets, new Set(['beta-origin']))
+
+    expect(result['Old Drone']).toBeUndefined()
+    expect(result['Current Drone'].servers['beta-origin'].assetPk).toBe(9)
   })
 })
