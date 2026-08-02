@@ -106,6 +106,11 @@ export interface ServerState {
   status: string
   assets: Array<AssetStatus>
   servers: Array<ServerDetails>
+  // Canonical origins advertised by this server's latest successful,
+  // authenticated poll. Undefined means no usable topology snapshot has been
+  // received yet. Connection failures and login expiry deliberately retain
+  // this snapshot so a transient poll failure cannot erase discovery state.
+  advertisedOrigins?: string[]
 }
 
 // Server names are operator-assigned display labels and are not guaranteed to
@@ -134,7 +139,8 @@ export const updateServerData = (server: ServerState, data: StatusData): ServerS
   userName: data.currentUser,
   csrfToken: data.csrfToken,
   assets: data.assets,
-  servers: data.servers
+  servers: data.servers,
+  advertisedOrigins: Array.from(new Set(data.servers.map((advertised) => canonicalServerOrigin(advertised.url))))
 })
 
 export const serverConnectFailed = (server: ServerState): ServerState => ({
@@ -150,8 +156,7 @@ export const serverUnauthenticated = (server: ServerState): ServerState => ({
   status: 'Login required',
   userName: undefined,
   csrfToken: undefined,
-  assets: [],
-  servers: []
+  assets: []
 })
 
 export const mergeServerPollResult = (currentServers: Record<string, ServerState>, serverKey: string, data: StatusData): Record<string, ServerState> => {
@@ -166,4 +171,48 @@ export const mergeServerPollResult = (currentServers: Record<string, ServerState
     nextServers[advertisedKey] = existing ? { ...existing, name: advertised.name, address: advertised.address, clientPort: advertised.clientPort, url: advertised.url } : advertised
   }
   return nextServers
+}
+
+// Keep only the part of the latest successful topology graph that remains
+// reachable from the page's direct origin. Traversing from the root prevents
+// an isolated cluster of stale snapshots from keeping itself alive forever.
+// Call this after every successful result in a poll batch has been merged so
+// reconciliation is independent of response order.
+export const reconcileServerTopology = (currentServers: Record<string, ServerState>, rootServerKey: string): Record<string, ServerState> => {
+  const canonicalRoot = canonicalServerOrigin(rootServerKey)
+  const retained = new Set<string>([canonicalRoot])
+  const pending = [canonicalRoot]
+
+  while (pending.length > 0) {
+    const serverKey = pending.pop()!
+    for (const advertisedOrigin of currentServers[serverKey]?.advertisedOrigins ?? []) {
+      if (retained.has(advertisedOrigin)) continue
+      retained.add(advertisedOrigin)
+      pending.push(advertisedOrigin)
+    }
+  }
+
+  return Object.fromEntries(Object.entries(currentServers).filter(([serverKey]) => retained.has(serverKey)))
+}
+
+export interface ServerTopologySnapshot {
+  serverName: string
+  origins: string[]
+}
+
+// ServerConfig describes peers, so a server normally omits itself from its
+// advertised list. Add the responding origin before comparing snapshots;
+// symmetric alpha->beta / beta->alpha configurations then describe the same
+// topology rather than producing a false warning.
+export const serverTopologyMismatch = (servers: ServerState[]): ServerTopologySnapshot[] => {
+  const snapshots = servers
+    .filter((server) => server.advertisedOrigins !== undefined)
+    .map((server) => ({
+      serverName: server.name,
+      origins: Array.from(new Set([server.url, ...server.advertisedOrigins!])).sort()
+    }))
+
+  if (snapshots.length < 2) return []
+  const reference = JSON.stringify(snapshots[0].origins)
+  return snapshots.some((snapshot) => JSON.stringify(snapshot.origins) !== reference) ? snapshots : []
 }

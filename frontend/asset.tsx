@@ -282,6 +282,24 @@ const pruneStaleServerEntries = (currentAssets: Record<string, AssetState>, serv
   return nextAssets
 }
 
+// Reconcile asset-server entries after topology reconciliation removes an
+// origin. This is separate from per-poll asset reconciliation because topology
+// removal may be triggered by a different server's advertised peer snapshot.
+export const pruneAssetServers = (currentAssets: Record<string, AssetState>, retainedServerKeys: Set<string>): Record<string, AssetState> => {
+  const nextAssets: Record<string, AssetState> = {}
+  for (const [assetName, assetState] of Object.entries(currentAssets)) {
+    const remainingServers = Object.fromEntries(Object.entries(assetState.servers).filter(([serverKey]) => retainedServerKeys.has(serverKey)))
+    const remainingServerKeys = Object.keys(remainingServers)
+    if (remainingServerKeys.length === 0) continue
+    nextAssets[assetName] = {
+      ...assetState,
+      servers: remainingServers,
+      selectedServerKey: assetState.selectedServerKey && retainedServerKeys.has(assetState.selectedServerKey) ? assetState.selectedServerKey : remainingServerKeys[0]
+    }
+  }
+  return nextAssets
+}
+
 export const mergeServerAssets = (
   currentAssets: Record<string, AssetState>,
   serverKey: string,

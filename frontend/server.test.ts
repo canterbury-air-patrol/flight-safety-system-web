@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import { ServerState, StatusData, canonicalServerOrigin, createServer, mergeServerPollResult } from './server'
+import {
+  ServerState,
+  StatusData,
+  canonicalServerOrigin,
+  createServer,
+  mergeServerPollResult,
+  reconcileServerTopology,
+  serverConnectFailed,
+  serverTopologyMismatch,
+  serverUnauthenticated
+} from './server'
 
 const statusData = (overrides: Partial<StatusData> = {}): StatusData => ({
   csrfToken: 'tok',
@@ -74,5 +84,107 @@ describe('mergeServerPollResult', () => {
     expect(Object.keys(result).sort()).toEqual([firstOrigin, secondOrigin])
     expect(result[firstOrigin].url).toBe(firstOrigin)
     expect(result[secondOrigin].url).toBe(secondOrigin)
+  })
+
+  it('stores canonical advertised origins from the latest successful snapshot', () => {
+    const alphaOrigin = canonicalServerOrigin('https://alpha.example')
+    const current = { [alphaOrigin]: createServer('alpha', '10.0.0.1', 8080, alphaOrigin) }
+    const result = mergeServerPollResult(
+      current,
+      alphaOrigin,
+      statusData({ servers: [{ name: 'beta', address: '10.0.0.2', client_port: 9090, url: 'https://BETA.example:443/' }] })
+    )
+
+    expect(result[alphaOrigin].advertisedOrigins).toEqual(['https://beta.example'])
+  })
+})
+
+describe('reconcileServerTopology', () => {
+  const alphaOrigin = canonicalServerOrigin('https://alpha.example')
+  const betaOrigin = canonicalServerOrigin('https://beta.example')
+  const gammaOrigin = canonicalServerOrigin('https://gamma.example')
+
+  const details = (name: string, url: string): { name: string; address: string; client_port: number; url: string } => ({
+    name,
+    address: new URL(url).hostname,
+    client_port: 9090,
+    url
+  })
+
+  it('removes a peer omitted from the direct server latest successful snapshot', () => {
+    let servers = mergeServerPollResult(
+      { [alphaOrigin]: createServer('alpha', '10.0.0.1', 8080, alphaOrigin) },
+      alphaOrigin,
+      statusData({ servers: [details('beta', betaOrigin)] })
+    )
+    servers = reconcileServerTopology(servers, alphaOrigin)
+
+    servers = mergeServerPollResult(servers, alphaOrigin, statusData())
+    servers = reconcileServerTopology(servers, alphaOrigin)
+
+    expect(Object.keys(servers)).toEqual([alphaOrigin])
+  })
+
+  it('retains the direct root even when no snapshot advertises it', () => {
+    const servers = mergeServerPollResult(
+      { [alphaOrigin]: createServer('direct', '127.0.0.1', 0, alphaOrigin) },
+      alphaOrigin,
+      statusData({ servers: [details('beta', betaOrigin)] })
+    )
+
+    expect(Object.keys(reconcileServerTopology(servers, alphaOrigin)).sort()).toEqual([alphaOrigin, betaOrigin])
+  })
+
+  it('retains topology across failed and unauthenticated polls', () => {
+    let servers = mergeServerPollResult(
+      { [alphaOrigin]: createServer('alpha', '10.0.0.1', 8080, alphaOrigin) },
+      alphaOrigin,
+      statusData({ servers: [details('beta', betaOrigin)] })
+    )
+
+    servers = { ...servers, [alphaOrigin]: serverConnectFailed(servers[alphaOrigin]) }
+    expect(Object.keys(reconcileServerTopology(servers, alphaOrigin)).sort()).toEqual([alphaOrigin, betaOrigin])
+
+    servers = { ...servers, [alphaOrigin]: serverUnauthenticated(servers[alphaOrigin]) }
+    expect(Object.keys(reconcileServerTopology(servers, alphaOrigin)).sort()).toEqual([alphaOrigin, betaOrigin])
+  })
+
+  it('keeps a peer advertised by another retained server and reports disagreement', () => {
+    let servers = mergeServerPollResult(
+      { [alphaOrigin]: createServer('alpha', '10.0.0.1', 8080, alphaOrigin) },
+      alphaOrigin,
+      statusData({ servers: [details('beta', betaOrigin), details('gamma', gammaOrigin)] })
+    )
+    servers = mergeServerPollResult(servers, gammaOrigin, statusData({ servers: [details('alpha', alphaOrigin), details('beta', betaOrigin)] }))
+    servers = mergeServerPollResult(servers, alphaOrigin, statusData({ servers: [details('gamma', gammaOrigin)] }))
+    servers = reconcileServerTopology(servers, alphaOrigin)
+
+    expect(Object.keys(servers).sort()).toEqual([alphaOrigin, betaOrigin, gammaOrigin])
+    expect(serverTopologyMismatch(Object.values(servers)).map((snapshot) => snapshot.serverName)).toEqual(['alpha', 'gamma'])
+  })
+
+  it('replaces an obsolete peer URL without disturbing the root', () => {
+    let servers = mergeServerPollResult(
+      { [alphaOrigin]: createServer('alpha', '10.0.0.1', 8080, alphaOrigin) },
+      alphaOrigin,
+      statusData({ servers: [details('beta', betaOrigin)] })
+    )
+    servers = reconcileServerTopology(servers, alphaOrigin)
+
+    servers = mergeServerPollResult(servers, alphaOrigin, statusData({ servers: [details('gamma', gammaOrigin)] }))
+    servers = reconcileServerTopology(servers, alphaOrigin)
+
+    expect(Object.keys(servers).sort()).toEqual([alphaOrigin, gammaOrigin])
+  })
+
+  it('treats symmetric peer lists as the same complete topology', () => {
+    let servers = mergeServerPollResult(
+      { [alphaOrigin]: createServer('alpha', '10.0.0.1', 8080, alphaOrigin) },
+      alphaOrigin,
+      statusData({ servers: [details('beta', betaOrigin)] })
+    )
+    servers = mergeServerPollResult(servers, betaOrigin, statusData({ servers: [details('alpha', alphaOrigin)] }))
+
+    expect(serverTopologyMismatch(Object.values(servers))).toEqual([])
   })
 })
