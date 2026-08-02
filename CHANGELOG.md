@@ -32,6 +32,10 @@
 - **One SMM configuration per asset** — a password-free audit and migration precheck identify legacy conflicts before the database enforces the optional one-to-one configuration contract. Unmigrated conflicting data returns an explicit `409` instead of selecting credentials by row order.
 - **Command acknowledgement history** — `AssetCommandAck` stores every acknowledgement with a database receipt time while the existing command columns remain the compatible latest-state view. The migration must land before the FSS writer begins inserting history rows.
 
+### Bug Fixes
+
+- **Reconciled peer topology** — successful authenticated polls now replace each server's discovery snapshot and prune obsolete peer origins and their asset state. Failed polls preserve the last successful topology, while conflicting retained snapshots remain visible in an operator warning.
+
 ## 1.0.0 — 2026-05-17
 
 First production release.

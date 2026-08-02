@@ -197,6 +197,7 @@ export const reconcileServerTopology = (currentServers: Record<string, ServerSta
 
 export interface ServerTopologySnapshot {
   serverName: string
+  serverOrigin: string
   origins: string[]
 }
 
@@ -209,6 +210,7 @@ export const serverTopologyMismatch = (servers: ServerState[]): ServerTopologySn
     .filter((server) => server.advertisedOrigins !== undefined)
     .map((server) => ({
       serverName: server.name,
+      serverOrigin: server.url,
       origins: Array.from(new Set([server.url, ...server.advertisedOrigins!])).sort()
     }))
 
