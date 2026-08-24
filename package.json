@@ -34,7 +34,7 @@
     "esbuild-config": "^1.0.1",
     "eslint": "^9.39.2",
     "eslint-plugin-react": "^7.37.5",
-    "globals": "^17.9.0",
+    "globals": "^17.11.0",
     "jsdom": "^30.0.1",
     "prettier": "^3.9.5",
     "typescript": "6.0.3",
