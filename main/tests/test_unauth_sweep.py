@@ -30,7 +30,7 @@ SKIP_NAMESPACES = {'admin'}
 SKIP_MODULES = {'django.contrib.auth.urls'}
 
 # Dummy values for named URL kwargs, tried when a bare reverse() fails.
-DUMMY_KWARGS = {'asset_id': 1}
+DUMMY_KWARGS = {'asset_id': 1, 'event_id': 1}
 
 
 def _iter_view_names(resolver):
@@ -43,7 +43,7 @@ def _iter_view_names(resolver):
                 continue
             yield from _iter_view_names(entry)
         elif isinstance(entry, URLPattern) and entry.name:
-            yield entry.name
+            yield entry.name, entry.pattern.regex.groupindex
 
 
 class UnauthenticatedAccessSweepTest(TestCase):
@@ -56,14 +56,14 @@ class UnauthenticatedAccessSweepTest(TestCase):
     def test_unauthenticated_requests_are_rejected(self):
         """Sweep every named URL pattern this project owns for a 302/403."""
         checked = []
-        for name in _iter_view_names(get_resolver()):
+        for name, parameter_names in _iter_view_names(get_resolver()):
             if name in PUBLIC_URL_NAMES:
                 continue
             try:
                 url = reverse(name)
             except NoReverseMatch:
                 try:
-                    url = reverse(name, kwargs=DUMMY_KWARGS)
+                    url = reverse(name, kwargs={key: value for key, value in DUMMY_KWARGS.items() if key in parameter_names})
                 except NoReverseMatch:
                     self.fail(f"don't know how to reverse '{name}' for the unauth sweep - add its kwargs or allowlist it")
 
