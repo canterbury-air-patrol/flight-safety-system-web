@@ -1,3 +1,4 @@
+import { AssetIdentityAlerts } from './identity-alerts'
 import { type Axis, degreesToDM, DMToDegrees } from '@canterbury-air-patrol/deg-converter'
 import {
   AssetState,
@@ -481,6 +482,7 @@ export function FSSAsset(props: FSSAssetContainerProps) {
   return (
     <div className="asset">
       <div className="asset-label">{asset.name}</div>
+      <AssetIdentityAlerts asset={asset} knownServers={knownServers} />
       {!commandAvailability.commandable && (
         <div className="alert alert-warning asset-command-disabled" role="status">
           <strong>Commands disabled:</strong> {commandAvailability.blockedReasons.join(', ')}
