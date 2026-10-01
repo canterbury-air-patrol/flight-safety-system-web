@@ -4,6 +4,8 @@
 
 ### Operator Visibility
 
+- **Duplicate-identity warnings** — persistent per-server alerts distinguish rejected newcomers from evicted connections, remain visible until acknowledged, and retain operator audit history. Bounded summaries preserve outstanding counts and eviction severity; paginated history keeps older evidence accessible. Deploy migration `0017` before the later FSS todo/77 writer; this web change does not yet produce events.
+
 - **GPS-fix and dead-reckoning status** — asset polling distinguishes the latest GPS-backed position from a no-fix dead-reckoned estimate, reports their server-timestamp interval, and keeps the warning visible while each coordinate record ages independently. The migration must land before FSS starts writing the new validity field.
 
 ### Security

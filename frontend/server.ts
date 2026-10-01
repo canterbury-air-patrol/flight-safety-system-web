@@ -56,7 +56,34 @@ export interface AssetCommandData {
   ack_superseded_by?: AckSupersedeReason
 }
 
+export interface IdentityPeer {
+  certificate_cn?: string
+  certificate_sha256?: string
+  session_id?: string
+  peer_address?: string
+}
+
+export interface IdentityEvent {
+  id: number
+  event_id: string
+  timestamp: string
+  received_at: string
+  outcome: 'newcomer_rejected' | 'incumbent_evicted'
+  incumbent: IdentityPeer
+  newcomer: IdentityPeer
+  acknowledged_at: string | null
+  acknowledged_by: string | null
+}
+
+export interface IdentityAlertSummary {
+  count: number
+  eviction_count: number
+  events: IdentityEvent[]
+}
+
 export interface AssetStatus {
+  // Absent on older peers; absence is not an identity all-clear.
+  identity_alerts?: IdentityAlertSummary
   asset: {
     name: string
     pk: number
