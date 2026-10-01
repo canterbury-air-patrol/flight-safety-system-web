@@ -17,6 +17,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 
 from fss.decorators import login_required_api
 
+from .identity_alerts import identity_alert_summaries
 from .models import Asset, AssetCommand, AssetCommandConfirmation, AssetPosition, AssetRTT, AssetSearchProgress, AssetStatus
 
 RTT_SAMPLE_LIMIT = 15
@@ -315,6 +316,7 @@ def bulk_asset_status_data(assets):
         ):
             rtts_by_asset.setdefault(rtt.asset_id, []).append(rtt)
 
+    alerts = identity_alert_summaries(asset_ids)
     results = []
     for asset in annotated_assets:
         results.append(
@@ -329,6 +331,8 @@ def bulk_asset_status_data(assets):
                 now=now,
             )
         )
+    for result in results:
+        result['identity_alerts'] = alerts.get(result['asset']['pk'], {'count': 0, 'eviction_count': 0, 'events': []})
     return results
 
 

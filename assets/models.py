@@ -286,3 +286,42 @@ class AssetCommandConfirmation(models.Model):
 
     def __str__(self):
         return f"Confirmation for {self.user} to send {self.command} to {self.asset}"
+
+
+class AssetIdentityEvent(models.Model):
+    """Durable FSS duplicate-identity resolution and first operator acknowledgement."""
+
+    asset = models.ForeignKey(Asset, on_delete=models.PROTECT)
+    event_id = models.UUIDField(default=uuid.uuid4, unique=True)
+    timestamp = models.DateTimeField(default=timezone.now)
+    received_at = models.DateTimeField(default=timezone.now, db_default=Now())
+    outcome = models.CharField(max_length=24, choices=(
+        ('newcomer_rejected', 'Newcomer rejected'),
+        ('incumbent_evicted', 'Incumbent evicted'),
+    ))
+    incumbent = models.JSONField(default=dict, db_default={})
+    newcomer = models.JSONField(default=dict, db_default={})
+    acknowledged_at = models.DateTimeField(null=True, blank=True)
+    acknowledged_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name='+',
+    )
+    acknowledged_username = models.CharField(max_length=150, default='', db_default='')
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['asset', '-id'], name='identity_event_history_idx'),
+            models.Index(fields=['asset', '-id'], condition=models.Q(acknowledged_at__isnull=True), name='identity_event_pending_idx'),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(outcome__in=['newcomer_rejected', 'incumbent_evicted']),
+                name='identity_event_valid_outcome',
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(acknowledged_at__isnull=True, acknowledged_by__isnull=True, acknowledged_username='') | (models.Q(acknowledged_at__isnull=False) & ~models.Q(acknowledged_username=''))
+                ),
+                name='identity_event_ack_consistent',
+            ),
+        ]
