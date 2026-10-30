@@ -45,7 +45,7 @@ import 'bootstrap/dist/css/bootstrap.css'
 import L, { DragEndEvent } from 'leaflet'
 import 'leaflet/dist/leaflet.css'
 import './fssweb.css'
-import React, { ReactNode, useState, useEffect, useRef, useCallback, useMemo, useContext } from 'react'
+import React, { ReactNode, useState, useEffect, useRef, useCallback, useMemo, use } from 'react'
 
 import markerIcon from 'leaflet/dist/images/marker-icon.png'
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
@@ -79,7 +79,7 @@ const commandFailure = (error: unknown): CommandFailure => ({
 const ErrorContext = React.createContext<(failure: CommandFailure | null) => void>(() => {})
 
 const useCommand = () => {
-  const setLastError = useContext(ErrorContext)
+  const setLastError = use(ErrorContext)
   return (fn: () => Promise<void> | void, onClose?: () => void) => async () => {
     try {
       await Promise.resolve(fn())
@@ -570,9 +570,9 @@ export function FSSServerBar(props: FSSServerBarProps) {
 
 export const FSSMainPage: React.FC = () => {
   const directServerKey = canonicalServerOrigin(window.location.origin)
-  const [knownServers, setKnownServers] = useState<Record<string, ServerState>>({
+  const [knownServers, setKnownServers] = useState<Record<string, ServerState>>(() => ({
     [directServerKey]: createServer('direct', '127.0.0.1', 0, window.location.origin)
-  })
+  }))
   const [knownAssets, setKnownAssets] = useState<Record<string, AssetState>>({})
   const [lastError, setLastError] = useState<CommandFailure | null>(null)
   const [retryingCommand, setRetryingCommand] = useState(false)
@@ -647,7 +647,7 @@ export const FSSMainPage: React.FC = () => {
 
     setKnownServers(currentServers)
     setKnownAssets(currentAssets)
-  }, [])
+  }, [directServerKey])
 
   useEffect(() => {
     unmountedRef.current = false
@@ -688,7 +688,7 @@ export const FSSMainPage: React.FC = () => {
   }
 
   return (
-    <ErrorContext.Provider value={setLastError}>
+    <ErrorContext value={setLastError}>
       <div>
         {lastError && (
           <div className="alert alert-danger alert-dismissible fade show m-3" role="alert">
@@ -704,6 +704,6 @@ export const FSSMainPage: React.FC = () => {
         <FSSServerBar knownServers={Object.values(knownServers)} />
         <FSSAssetSet knownAssets={Object.values(knownAssets)} knownServers={knownServers} setSelected={setAssetSelectedServer} />
       </div>
-    </ErrorContext.Provider>
+    </ErrorContext>
   )
 }

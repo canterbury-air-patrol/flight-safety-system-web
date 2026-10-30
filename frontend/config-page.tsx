@@ -36,13 +36,17 @@ export const ConfigPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch('/config/status.json')
+    const controller = new AbortController()
+    fetch('/config/status.json', { signal: controller.signal })
       .then((r) => {
         if (!r.ok) throw new Error(`${r.status} ${r.statusText}`)
         return r.json()
       })
       .then(setData)
-      .catch((e) => setError(e.message))
+      .catch((e) => {
+        if (e.name !== 'AbortError') setError(e.message)
+      })
+    return () => controller.abort()
   }, [])
 
   if (error) {

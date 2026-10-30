@@ -1,24 +1,21 @@
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { Container, Card, Form, Button, Alert } from 'react-bootstrap'
 import { useSearchParams } from 'react-router-dom'
 
 export const LoginPage: React.FC = () => {
-  const [csrfToken, setCsrfToken] = useState('')
   const [searchParams] = useSearchParams()
   const hasError = searchParams.get('error') === '1'
 
-  useEffect(() => {
-    // Read CSRF token from cookie. Split on ';' and trim each segment so a
-    // missing space after the separator can't hide the cookie. slice() (rather
-    // than split('=')) keeps any '=' that may appear within the value intact.
-    const prefix = 'csrftoken='
-    const token = document.cookie
+  // Read CSRF token from cookie. Split on ';' and trim each segment so a
+  // missing space after the separator can't hide the cookie. slice() (rather
+  // than split('=')) keeps any '=' that may appear within the value intact.
+  const prefix = 'csrftoken='
+  const csrfToken =
+    document.cookie
       .split(';')
       .map((c) => c.trim())
       .find((c) => c.startsWith(prefix))
-      ?.slice(prefix.length)
-    setCsrfToken(token ?? '')
-  }, [])
+      ?.slice(prefix.length) ?? ''
 
   return (
     <Container className="d-flex align-items-center justify-content-center" style={{ minHeight: '100vh' }}>
