@@ -22,7 +22,7 @@
     "react-bootstrap": "^2.10.10",
     "react-dom": "^19.3.1",
     "react-leaflet": "^5.0.0",
-    "react-router-dom": "^7.18.4"
+    "react-router-dom": "^7.18.5"
   },
   "devDependencies": {
     "@eslint-react/eslint-plugin": "^5.28.8",
