@@ -4,6 +4,6 @@ django-cors-headers==4.9.0
 
 django-axes==9.0.0
 
-psycopg[binary,pool]==3.3.8
+psycopg[binary,pool]==3.3.9
 
 uwsgi==2.0.31
